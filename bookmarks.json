@@ -31,7 +31,15 @@
         { "title": "Eclipse (mirror)", "url": "http://yecdjimqiaekprxza6wkqecma4bwt757qiyfjngsaxg7rkjv4xukpwad.onion/" },
         { "title": "The Gentlemen", "url": "http://tezwsse5czllksjb7cwp65rvnk4oobmzti2znn42i43bjdfd2prqqkad.onion/" },
         { "title": "Aurora", "url": "http://pavregldzg2ypbd3gxbil2suxfok7ykmcknwhkli24anpks6lndymyyd.onion/" },
-        { "title": "Abyss-data", "url": "http://3ev4metjirohtdpshsqlkrqcmxq6zu3d7obrdhglpy5jpbr7whmlfgqd.onion/" }
+        { "title": "Abyss-data", "url": "http://3ev4metjirohtdpshsqlkrqcmxq6zu3d7obrdhglpy5jpbr7whmlfgqd.onion/" },
+        { "title": "Ailock", "url": "http://dhnsppqjaaa22lsqxl2tfhji4ca43743kubltnodvsft3hkvai77p6ad.onion/" },
+        { "title": "DeadLock", "url": "https://deadlock.liveblog365.com/" },
+        { "title": "DeadLock (mirror)", "url": "http://deadblogdbdu5wprek7wa2o4ce7rnt6u6ntqeud3hzjjcveosgpsqqqd.onion/" },
+        { "title": "SafePay", "url": "http://safepaypfxntwixwjrlcscft433ggemlhgkkdupi2ynhtcmvdgubmoyd.onion/" },
+        { "title": "SafePay (mirror 2)", "url": "http://nj5qix45sxnl4h4og6hcgwengg2oqloj3c2rhc6dpwiofx3jbivcs6qd.onion/" },
+        { "title": "SafePay (mirror 3)", "url": "http://nz4z6ruzcekriti5cjjiiylzvrmysyqwibxztk6voem4trtx7gstpjid.onion/" },
+        { "title": "SafePay (mirror 4)", "url": "http://j3dp6okmaklajrsk6zljl5sfa2vpui7j2w6cwmhmmqhab6frdfbphhid.onion/" },
+        { "title": "SafePay (TON)", "url": "tonsite://safepay.ton" }
       ]
     },
     {
