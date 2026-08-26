@@ -39,7 +39,18 @@
         { "title": "SafePay (mirror 2)", "url": "http://nj5qix45sxnl4h4og6hcgwengg2oqloj3c2rhc6dpwiofx3jbivcs6qd.onion/" },
         { "title": "SafePay (mirror 3)", "url": "http://nz4z6ruzcekriti5cjjiiylzvrmysyqwibxztk6voem4trtx7gstpjid.onion/" },
         { "title": "SafePay (mirror 4)", "url": "http://j3dp6okmaklajrsk6zljl5sfa2vpui7j2w6cwmhmmqhab6frdfbphhid.onion/" },
-        { "title": "SafePay (TON)", "url": "tonsite://safepay.ton" }
+        { "title": "SafePay (TON)", "url": "tonsite://safepay.ton" },
+        { "title": "Chaos", "url": "http://hptqq2o2qjva7lcaaq67w36jihzivkaitkexorauw7b2yul2z6zozpqd.onion/" },
+        { "title": "Global Secret Group", "url": "http://o5lsqyar7ox25z734k6zaxt2vf7bsyi4q5rturi5iyxzqo3ica7bjsad.onion/" },
+        { "title": "Global Secret Group (mirror 2)", "url": "http://ee2iit5piqlarwz3kxm6ctkpbpt2olsxadq7lclqwnhlzaafamfbpiid.onion/" },
+        { "title": "Global Secret Group (mirror 3)", "url": "http://dcjy5n3qqnk4lbpwoxh7xgki6lym23jdjsjlkhcw63gbh4jl7r4bukqd.onion/" },
+        { "title": "Global Secret Group (mirror 4)", "url": "http://b5gozwifyvy5bhys3bsiq5tedhpot345udggjyb54fsjd2m7nteftkad.onion/" },
+        { "title": "Global Secret Group (mirror 5)", "url": "http://hnkclceyxgwa2g5fxvvu37bvpejqhpup5vlybxfx45h6xloyjnvxuuyd.onion/" },
+        { "title": "Global Secret Group (mirror 6)", "url": "http://3u2h3ingiz45yyiplgbuflp6jex4xd2wtubvgjdg44nlgllrjv6qxxid.onion/" },
+        { "title": "Genesis", "url": "http://genesis6ixpb5mcy4kudybtw5op2wqlrkocfogbnenz3c647ibqixiad.onion/" },
+        { "title": "Dark Project", "url": "http://darkprn3d3udnhpuxknsrhft3376lrz5tenhgkrxge5hxqe46pkbrwid.onion/" },
+        { "title": "Majinahanashi", "url": "http://lthicpjqc7gkn5eq3epxndc2uig3yngvcbdya4u3m3byjod5km4yuwqd.onion/api/posts?source=blog&page=1&per_page=30" },
+        { "title": "Beast", "url": "http://beast6azu4f7fxjakiayhnssybibsgjnmy77a6duufqw5afjzfjhzuqd.onion/" }
       ]
     },
     {
