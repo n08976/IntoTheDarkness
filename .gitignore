@@ -1,0 +1,4 @@
+# Generated files are tracked (so they can be fetched directly), but
+# regenerate them from bookmarks.json rather than editing by hand.
+__pycache__/
+*.pyc
