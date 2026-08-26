@@ -1,0 +1,80 @@
+{
+  "title": "IntoTheDarkness — Tor / Onion Investigation Bookmarks",
+  "description": "Curated onion and clearnet links for cyber threat intelligence and darkweb investigations. Managed as a single source of truth; index.html and tor_bookmarks.html are generated from this file.",
+  "categories": [
+    {
+      "name": "Ransomware & Extortion Leak Sites",
+      "note": "Threat-actor data-leak / extortion blogs. Addresses rotate frequently — verify before relying on any single one.",
+      "links": [
+        { "title": "Shiny Hunters", "url": "http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/" },
+        { "title": "ThreeAM Blog", "url": "http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/" },
+        { "title": "FulcrumSec", "url": "http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/" },
+        { "title": "Akira", "url": "https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/" },
+        { "title": "LockBit", "url": "http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/" },
+        { "title": "LockBit 5.0", "url": "http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/" },
+        { "title": "LockBit 5.0 Blog", "url": "http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/" },
+        { "title": "KS", "url": "http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/" },
+        { "title": "Qilin", "url": "http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/" },
+        { "title": "Medusa", "url": "http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/" },
+        { "title": "INC", "url": "http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures" },
+        { "title": "RansomEXX", "url": "http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/" },
+        { "title": "Rhysida", "url": "http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/" },
+        { "title": "Icarus", "url": "https://91.215.85.45/" }
+      ]
+    },
+    {
+      "name": "CTI Reference & Tracking Lists",
+      "note": "Aggregated, community-maintained lists of threat-actor domains and APT operations. Good starting points for finding new leak-site addresses.",
+      "links": [
+        { "title": "marktsec/Ransomware_Official_Domains (GitHub)", "url": "https://github.com/marktsec/Ransomware_Official_Domains" },
+        { "title": "alecmuffett/real-world-onion-sites (GitHub)", "url": "https://github.com/alecmuffett/real-world-onion-sites" },
+        { "title": "APT Groups and Operations (Google Sheets)", "url": "https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690" }
+      ]
+    },
+    {
+      "name": "Forums & Communities",
+      "note": "Underground and security-community forums monitored for chatter, leaks, and actor attribution.",
+      "links": [
+        { "title": "PwnForums", "url": "http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/" },
+        { "title": "DEF CON Forums", "url": "https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/" }
+      ]
+    },
+    {
+      "name": "Marketplaces",
+      "note": "Darkweb marketplace listings. Tracked for investigative visibility only.",
+      "links": [
+        { "title": "TOR SHOP — Dark Web Marketplace", "url": "http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php" }
+      ]
+    },
+    {
+      "name": "Directories & Search Engines",
+      "note": "Onion directories, link indexes, and deepweb search engines for discovering new sites.",
+      "links": [
+        { "title": "onion.live", "url": "https://onion.live/" },
+        { "title": "The Hidden Wiki", "url": "http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/Main_Page" },
+        { "title": "Onion Index — Deep Web Search", "url": "http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/" }
+      ]
+    },
+    {
+      "name": "Tor Project & Infrastructure",
+      "note": "Official Tor Project resources, support, and bridges.",
+      "links": [
+        { "title": "Learn more about Tor", "url": "http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/" },
+        { "title": "The Tor Blog", "url": "http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/" },
+        { "title": "Tor Support Portal", "url": "http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/" },
+        { "title": "Tor Browser Manual", "url": "about:manual" },
+        { "title": "Tor Community — Get Involved", "url": "http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/" },
+        { "title": "Donate — Keep Tor Strong", "url": "https://donate.torproject.org/" },
+        { "title": "Circumvent Censorship — Get Bridges", "url": "http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/" }
+      ]
+    },
+    {
+      "name": "OSINT Tools",
+      "note": "Clearnet open-source-intelligence utilities used alongside darkweb investigations.",
+      "links": [
+        { "title": "Grayhatwarfare — Public Buckets", "url": "https://buckets.grayhatwarfare.com/" },
+        { "title": "izoomYou — Instagram Profile Picture Zoom", "url": "https://izoomyou.com/en/" }
+      ]
+    }
+  ]
+}

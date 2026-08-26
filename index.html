@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IntoTheDarkness — Tor / Onion Investigation Bookmarks</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14181d; --panel-2:#191e25; --border:#262d36;
+    --text:#d7dde5; --muted:#8b96a5; --accent:#6ea8fe; --onion:#b48ef0;
+    --clear:#5bd6a0; --danger:#ff7a7a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    position:sticky; top:0; z-index:5; background:rgba(11,13,16,.92);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--border);
+    padding:18px 20px 14px;
+  }
+  h1{margin:0 0 4px; font-size:19px; letter-spacing:.2px}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 12px; max-width:820px}
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  #search{
+    flex:1 1 260px; min-width:200px; background:var(--panel-2);
+    border:1px solid var(--border); color:var(--text); border-radius:8px;
+    padding:9px 12px; font-size:14px; outline:none;
+  }
+  #search:focus{border-color:var(--accent)}
+  .meta{color:var(--muted); font-size:12px; white-space:nowrap}
+  .ctrl{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--muted);
+    border-radius:8px; padding:9px 12px; font-size:13px; cursor:pointer;
+  }
+  .ctrl:hover{color:var(--text); border-color:var(--accent)}
+  main{padding:16px 20px 60px; max-width:960px; margin:0 auto}
+  .cat{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    margin:14px 0; overflow:hidden;
+  }
+  .cat.collapsed .entries,.cat.collapsed .cat-note{display:none}
+  .cat-title{
+    display:flex; align-items:center; gap:10px; margin:0; cursor:pointer;
+    padding:14px 16px; font-size:15px; user-select:none;
+  }
+  .cat-title:hover{background:var(--panel-2)}
+  .chev{display:inline-block; transition:transform .15s ease; color:var(--muted); font-size:12px}
+  .cat.collapsed .chev{transform:rotate(-90deg)}
+  .count{
+    margin-left:auto; background:var(--panel-2); color:var(--muted);
+    border:1px solid var(--border); border-radius:20px; padding:1px 9px; font-size:12px;
+  }
+  .cat-note{margin:0 16px 8px; color:var(--muted); font-size:12.5px}
+  .entries{list-style:none; margin:0; padding:4px 8px 10px}
+  .entry{
+    display:flex; align-items:center; gap:10px; padding:9px 8px;
+    border-radius:8px; border-bottom:1px solid transparent;
+  }
+  .entry:hover{background:var(--panel-2)}
+  .entry-main{display:flex; align-items:center; gap:8px; flex:0 0 auto; min-width:0}
+  .entry-link{color:var(--accent); text-decoration:none; font-weight:600; white-space:nowrap}
+  .entry-link:hover{text-decoration:underline}
+  .badge{font-size:10.5px; padding:1px 7px; border-radius:20px; border:1px solid var(--border); text-transform:uppercase; letter-spacing:.4px}
+  .badge.onion{color:var(--onion)}
+  .badge.clear{color:var(--clear)}
+  .entry-url{
+    flex:1 1 auto; min-width:0; color:var(--muted); font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .copy{
+    flex:0 0 auto; background:transparent; border:1px solid var(--border); color:var(--muted);
+    border-radius:6px; padding:3px 9px; font-size:11px; cursor:pointer;
+  }
+  .copy:hover{color:var(--text); border-color:var(--accent)}
+  .copy.done{color:var(--clear); border-color:var(--clear)}
+  .empty{display:none; color:var(--muted); text-align:center; padding:40px}
+  footer{color:var(--muted); font-size:12px; text-align:center; padding:24px 20px 40px}
+  .opsec{
+    max-width:960px; margin:0 auto; background:rgba(255,122,122,.06);
+    border:1px solid rgba(255,122,122,.25); border-radius:10px; padding:10px 14px;
+    color:#e7b8b8; font-size:12.5px;
+  }
+  @media (max-width:620px){
+    .entry{flex-wrap:wrap}
+    .entry-url{flex-basis:100%; order:3}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>IntoTheDarkness — Tor / Onion Investigation Bookmarks</h1>
+  <p class="sub">Curated onion and clearnet links for cyber threat intelligence and darkweb investigations. Managed as a single source of truth; index.html and tor_bookmarks.html are generated from this file.</p>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Filter by name or address…" autocomplete="off" spellcheck="false">
+    <button class="ctrl" id="expand">Expand all</button>
+    <button class="ctrl" id="collapse">Collapse all</button>
+    <span class="meta">32 links · 7 sections · updated 2026-08-26 15:35 UTC</span>
+  </div>
+</header>
+<main>
+  <p class="opsec">Investigation resource. Open .onion links only in Tor Browser, on an isolated/VM environment appropriate to your operational security. Addresses are volatile and may be offline, seized, or rotated.</p>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>Ransomware &amp; Extortion Leak Sites<span class="count">14</span></h2>
+      <p class="cat-note">Threat-actor data-leak / extortion blogs. Addresses rotate frequently — verify before relying on any single one.</p>
+      <ul class="entries">
+        <li class="entry" data-search="shiny hunters http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/" target="_blank" rel="noopener noreferrer">Shiny Hunters</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/">http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/</div>
+          <button class="copy" data-url="http://shnyhntww34phqoa6dcgnvps2yu7dlwzmy5lkvejwjdo6z7bmgshzayd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="threeam blog http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/" target="_blank" rel="noopener noreferrer">ThreeAM Blog</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/">http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/</div>
+          <button class="copy" data-url="http://threeamkelxicjsaf2czjyz2lc4q3ngqkxhhlexyfcp2o6raw4rphyad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="fulcrumsec http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/" target="_blank" rel="noopener noreferrer">FulcrumSec</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/">http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/</div>
+          <button class="copy" data-url="http://4e3p3in2bl67hxchuwza7qvnpe7pyeloyztr5fnh257fxkovfhappjyd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="akira https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/" target="_blank" rel="noopener noreferrer">Akira</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/">https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/</div>
+          <button class="copy" data-url="https://akiral2iz6a7qgd3ayp3l6yub7xx2uep76idk3u2kollpj5z3z636bad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="lockbit http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/" target="_blank" rel="noopener noreferrer">LockBit</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/">http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/</div>
+          <button class="copy" data-url="http://lockbit33chewwx25efq6dgkhkw4u7nefudq4ijkuamjfd7x73on6dyd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="lockbit 5.0 http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/" target="_blank" rel="noopener noreferrer">LockBit 5.0</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/">http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/</div>
+          <button class="copy" data-url="http://lockbitsuppyx2jegaoyiw44ica5vdho63m5ijjlmfb7omq3tfr3qhyd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="lockbit 5.0 blog http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/" target="_blank" rel="noopener noreferrer">LockBit 5.0 Blog</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/">http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/</div>
+          <button class="copy" data-url="http://lockbitapt67g6rwzjbcxnww5efpg4qok6vpfeth7wx3okj52ks4wtad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="ks http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/" target="_blank" rel="noopener noreferrer">KS</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/">http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/</div>
+          <button class="copy" data-url="http://ks5424y3wpr5zlug5c7i6svvxweinhbdcqcfnptkfcutrncfazzgz5id.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="qilin http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/" target="_blank" rel="noopener noreferrer">Qilin</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/">http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/</div>
+          <button class="copy" data-url="http://ijzn3sicrcy7guixkzjkib4ukbiilwc3xhnmby4mcbccnsd7j2rekvqd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="medusa http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/" target="_blank" rel="noopener noreferrer">Medusa</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/">http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/</div>
+          <button class="copy" data-url="http://xfv4jzckytb4g3ckwemcny3ihv4i5p4lqzdpi624cxisu35my5fwi5qd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="inc http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures">
+          <div class="entry-main">
+            <a class="entry-link" href="http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures" target="_blank" rel="noopener noreferrer">INC</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures">http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures</div>
+          <button class="copy" data-url="http://incblog6qu4y4mm4zvw5nrmue6qbwtgjsxpw6b7ixzssu36tsajldoad.onion/blog/disclosures">copy</button>
+        </li>
+        <li class="entry" data-search="ransomexx http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/" target="_blank" rel="noopener noreferrer">RansomEXX</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/">http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/</div>
+          <button class="copy" data-url="http://rnsm777cdsjrsdlbs4v5qoeppu3px6sb2igmh53jzrx7ipcrbjz5b2ad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="rhysida http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/" target="_blank" rel="noopener noreferrer">Rhysida</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/">http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/</div>
+          <button class="copy" data-url="http://rhysidafohrhyy2aszi7bm32tnjat5xri65fopcxkdfxhi4tidsg7cad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="icarus https://91.215.85.45/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://91.215.85.45/" target="_blank" rel="noopener noreferrer">Icarus</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://91.215.85.45/">https://91.215.85.45/</div>
+          <button class="copy" data-url="https://91.215.85.45/">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>CTI Reference &amp; Tracking Lists<span class="count">3</span></h2>
+      <p class="cat-note">Aggregated, community-maintained lists of threat-actor domains and APT operations. Good starting points for finding new leak-site addresses.</p>
+      <ul class="entries">
+        <li class="entry" data-search="marktsec/ransomware_official_domains (github) https://github.com/marktsec/ransomware_official_domains">
+          <div class="entry-main">
+            <a class="entry-link" href="https://github.com/marktsec/Ransomware_Official_Domains" target="_blank" rel="noopener noreferrer">marktsec/Ransomware_Official_Domains (GitHub)</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://github.com/marktsec/Ransomware_Official_Domains">https://github.com/marktsec/Ransomware_Official_Domains</div>
+          <button class="copy" data-url="https://github.com/marktsec/Ransomware_Official_Domains">copy</button>
+        </li>
+        <li class="entry" data-search="alecmuffett/real-world-onion-sites (github) https://github.com/alecmuffett/real-world-onion-sites">
+          <div class="entry-main">
+            <a class="entry-link" href="https://github.com/alecmuffett/real-world-onion-sites" target="_blank" rel="noopener noreferrer">alecmuffett/real-world-onion-sites (GitHub)</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://github.com/alecmuffett/real-world-onion-sites">https://github.com/alecmuffett/real-world-onion-sites</div>
+          <button class="copy" data-url="https://github.com/alecmuffett/real-world-onion-sites">copy</button>
+        </li>
+        <li class="entry" data-search="apt groups and operations (google sheets) https://docs.google.com/spreadsheets/d/1h9_xaxqhpwaa4o_son4gx0yoizlcbwmsdvepfx68eku/edit?gid=376438690#gid=376438690">
+          <div class="entry-main">
+            <a class="entry-link" href="https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690" target="_blank" rel="noopener noreferrer">APT Groups and Operations (Google Sheets)</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690">https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690</div>
+          <button class="copy" data-url="https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>Forums &amp; Communities<span class="count">2</span></h2>
+      <p class="cat-note">Underground and security-community forums monitored for chatter, leaks, and actor attribution.</p>
+      <ul class="entries">
+        <li class="entry" data-search="pwnforums http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/" target="_blank" rel="noopener noreferrer">PwnForums</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/">http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/</div>
+          <button class="copy" data-url="http://pwnfrm7rbf6kyerigxi677lcz5ifmoagdbqqknwdu2by27wfdst5qmqd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="def con forums https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/" target="_blank" rel="noopener noreferrer">DEF CON Forums</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/">https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/</div>
+          <button class="copy" data-url="https://ezdhgsy2aw7zg54z6dqsutrduhl22moami5zv2zt6urr6vub7gs6wfad.onion/">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>Marketplaces<span class="count">1</span></h2>
+      <p class="cat-note">Darkweb marketplace listings. Tracked for investigative visibility only.</p>
+      <ul class="entries">
+        <li class="entry" data-search="tor shop — dark web marketplace http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php">
+          <div class="entry-main">
+            <a class="entry-link" href="http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php" target="_blank" rel="noopener noreferrer">TOR SHOP — Dark Web Marketplace</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php">http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php</div>
+          <button class="copy" data-url="http://torshopogptfzg7otkob4ewmzbdbutpbe37lwbfqvrirqnmqqcladkad.onion/home.php">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>Directories &amp; Search Engines<span class="count">3</span></h2>
+      <p class="cat-note">Onion directories, link indexes, and deepweb search engines for discovering new sites.</p>
+      <ul class="entries">
+        <li class="entry" data-search="onion.live https://onion.live/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://onion.live/" target="_blank" rel="noopener noreferrer">onion.live</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://onion.live/">https://onion.live/</div>
+          <button class="copy" data-url="https://onion.live/">copy</button>
+        </li>
+        <li class="entry" data-search="the hidden wiki http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/main_page">
+          <div class="entry-main">
+            <a class="entry-link" href="http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/Main_Page" target="_blank" rel="noopener noreferrer">The Hidden Wiki</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/Main_Page">http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/Main_Page</div>
+          <button class="copy" data-url="http://zqktlwiuavvvqqt4ybvgvi7tyo4hjl5xgfuvpdf6otjiycgwqbym2qad.onion/wiki/index.php/Main_Page">copy</button>
+        </li>
+        <li class="entry" data-search="onion index — deep web search http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/" target="_blank" rel="noopener noreferrer">Onion Index — Deep Web Search</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/">http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/</div>
+          <button class="copy" data-url="http://oniondxjxs2mzjkbz7ldlflenh6huksestjsisc3usxht3wqgk6a62yd.onion/">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>Tor Project &amp; Infrastructure<span class="count">7</span></h2>
+      <p class="cat-note">Official Tor Project resources, support, and bridges.</p>
+      <ul class="entries">
+        <li class="entry" data-search="learn more about tor http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/" target="_blank" rel="noopener noreferrer">Learn more about Tor</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/">http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/</div>
+          <button class="copy" data-url="http://2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="the tor blog http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/" target="_blank" rel="noopener noreferrer">The Tor Blog</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/">http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/</div>
+          <button class="copy" data-url="http://pzhdfe7jraknpj2qgu5cz2u3i4deuyfwmonvzu5i3nyw4t4bmg7o5pad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="tor support portal http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/" target="_blank" rel="noopener noreferrer">Tor Support Portal</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/">http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/</div>
+          <button class="copy" data-url="http://rzuwtpc4wb3xdzrj3yeajsvm3fkq4vbeubm2tdxaqruzzzgs5dwemlad.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="tor browser manual about:manual">
+          <div class="entry-main">
+            <a class="entry-link" href="about:manual" target="_blank" rel="noopener noreferrer">Tor Browser Manual</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="about:manual">about:manual</div>
+          <button class="copy" data-url="about:manual">copy</button>
+        </li>
+        <li class="entry" data-search="tor community — get involved http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/" target="_blank" rel="noopener noreferrer">Tor Community — Get Involved</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/">http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/</div>
+          <button class="copy" data-url="http://xmrhfasfg5suueegrnc4gsgyi2tyclcy5oz7f5drnrodmdtob6t2ioyd.onion/">copy</button>
+        </li>
+        <li class="entry" data-search="donate — keep tor strong https://donate.torproject.org/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://donate.torproject.org/" target="_blank" rel="noopener noreferrer">Donate — Keep Tor Strong</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://donate.torproject.org/">https://donate.torproject.org/</div>
+          <button class="copy" data-url="https://donate.torproject.org/">copy</button>
+        </li>
+        <li class="entry" data-search="circumvent censorship — get bridges http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/">
+          <div class="entry-main">
+            <a class="entry-link" href="http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/" target="_blank" rel="noopener noreferrer">Circumvent Censorship — Get Bridges</a>
+            <span class="badge onion">onion</span>
+          </div>
+          <div class="entry-url" title="http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/">http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/</div>
+          <button class="copy" data-url="http://yq5jjvr7drkjrelzhut7kgclfuro65jjlivyzfmxiq2kyv5lickrl4qd.onion/">copy</button>
+        </li>
+      </ul>
+    </section>
+    <section class="cat" data-cat>
+      <h2 class="cat-title"><span class="chev">&#9656;</span>OSINT Tools<span class="count">2</span></h2>
+      <p class="cat-note">Clearnet open-source-intelligence utilities used alongside darkweb investigations.</p>
+      <ul class="entries">
+        <li class="entry" data-search="grayhatwarfare — public buckets https://buckets.grayhatwarfare.com/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://buckets.grayhatwarfare.com/" target="_blank" rel="noopener noreferrer">Grayhatwarfare — Public Buckets</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://buckets.grayhatwarfare.com/">https://buckets.grayhatwarfare.com/</div>
+          <button class="copy" data-url="https://buckets.grayhatwarfare.com/">copy</button>
+        </li>
+        <li class="entry" data-search="izoomyou — instagram profile picture zoom https://izoomyou.com/en/">
+          <div class="entry-main">
+            <a class="entry-link" href="https://izoomyou.com/en/" target="_blank" rel="noopener noreferrer">izoomYou — Instagram Profile Picture Zoom</a>
+            <span class="badge clear">clearnet</span>
+          </div>
+          <div class="entry-url" title="https://izoomyou.com/en/">https://izoomyou.com/en/</div>
+          <button class="copy" data-url="https://izoomyou.com/en/">copy</button>
+        </li>
+      </ul>
+    </section>
+  <p class="empty" id="empty">No links match your filter.</p>
+</main>
+<footer>IntoTheDarkness · generated from bookmarks.json · 2026-08-26 15:35 UTC</footer>
+<script>
+  const search = document.getElementById('search');
+  const cats = [...document.querySelectorAll('[data-cat]')];
+  const empty = document.getElementById('empty');
+
+  function applyFilter(q){
+    q = q.trim().toLowerCase();
+    let anyVisible = false;
+    cats.forEach(cat=>{
+      let visibleInCat = 0;
+      cat.querySelectorAll('.entry').forEach(e=>{
+        const hit = !q || e.dataset.search.includes(q);
+        e.style.display = hit ? '' : 'none';
+        if(hit) visibleInCat++;
+      });
+      const show = visibleInCat > 0;
+      cat.style.display = show ? '' : 'none';
+      if(show){ anyVisible = true; if(q) cat.classList.remove('collapsed'); }
+    });
+    empty.style.display = anyVisible ? 'none' : 'block';
+  }
+  search.addEventListener('input', ()=>applyFilter(search.value));
+
+  document.querySelectorAll('.cat-title').forEach(t=>{
+    t.addEventListener('click', ()=> t.parentElement.classList.toggle('collapsed'));
+  });
+  document.getElementById('expand').addEventListener('click', ()=>{
+    cats.forEach(c=>c.classList.remove('collapsed'));
+  });
+  document.getElementById('collapse').addEventListener('click', ()=>{
+    cats.forEach(c=>c.classList.add('collapsed'));
+  });
+  document.querySelectorAll('.copy').forEach(b=>{
+    b.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      try{
+        await navigator.clipboard.writeText(b.dataset.url);
+        const old = b.textContent; b.textContent='copied'; b.classList.add('done');
+        setTimeout(()=>{b.textContent=old; b.classList.remove('done');},1200);
+      }catch(e){
+        const ta=document.createElement('textarea'); ta.value=b.dataset.url;
+        document.body.appendChild(ta); ta.select();
+        try{document.execCommand('copy');}catch(_){}
+        ta.remove();
+        const old=b.textContent; b.textContent='copied'; b.classList.add('done');
+        setTimeout(()=>{b.textContent=old; b.classList.remove('done');},1200);
+      }
+    });
+  });
+</script>
+</body>
+</html>
