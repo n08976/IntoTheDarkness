@@ -2,3 +2,16 @@
 # regenerate them from bookmarks.json rather than editing by hand.
 __pycache__/
 *.pyc
+
+# monitor/ tooling
+monitor/.venv/
+monitor/.v/
+monitor/data/
+monitor/config/*.yaml
+monitor/.env
+monitor/**/__pycache__/
+monitor/*.egg-info/
+monitor/.pytest_cache/
+monitor/.ruff_cache/
+monitor/.mypy_cache/
+monitor/.coverage

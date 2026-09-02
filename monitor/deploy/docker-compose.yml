@@ -1,0 +1,53 @@
+# Tor plus the monitor, so scheduled runs do not depend on a browser being open.
+#   docker compose up -d
+#   docker compose exec itd itd tor status --identity
+services:
+  tor:
+    image: dperson/torproxy:latest
+    container_name: itd-tor
+    restart: unless-stopped
+    # Loopback only. An open SOCKS proxy is an open proxy for anyone who can
+    # reach the host.
+    ports:
+      - "127.0.0.1:9050:9050"
+      - "127.0.0.1:9051:9051"
+    volumes:
+      - ./torrc:/etc/tor/torrc:ro
+      - tor-data:/var/lib/tor
+    healthcheck:
+      # "Bootstrapped" means a circuit exists, not merely that the port is open.
+      test:
+        - CMD-SHELL
+        - curl -sf --max-time 40 --socks5-hostname 127.0.0.1:9050 -o /dev/null https://check.torproject.org/
+      interval: 30s
+      timeout: 45s
+      retries: 20
+      start_period: 180s
+
+  itd:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: itd
+    restart: unless-stopped
+    depends_on:
+      tor:
+        condition: service_healthy
+    environment:
+      ITD_TOR_SOCKS_URL: socks5://tor:9050
+      ITD_TOR_CONTROL_PORT: "9051"
+      ITD_DATA_DIR: /data
+      ITD_TARGETS_FILE: /config/targets.yaml
+      ITD_RULES_FILE: /config/rules.yaml
+      ITD_SECTORS_FILE: /config/sectors.yaml
+      ITD_BOOKMARKS_FILE: /config/bookmarks.json
+    env_file:
+      - .env
+    volumes:
+      - ../config:/config:ro
+      - itd-data:/data
+    command: ["itd", "watch", "--interval", "21600"]
+
+volumes:
+  tor-data:
+  itd-data:

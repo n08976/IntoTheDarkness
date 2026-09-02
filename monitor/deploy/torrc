@@ -1,0 +1,23 @@
+# Client-only Tor for IntoTheDarkness. No relaying, no exit.
+SocksPort 0.0.0.0:9050
+ControlPort 0.0.0.0:9051
+
+# Circuit rotation (`itd` issues NEWNYM after circuit-shaped failures).
+# CookieAuthentication is preferred. Set a password only if you must reach the
+# control port from another host, and then set ITD_TOR_CONTROL_PASSWORD to match.
+CookieAuthentication 1
+CookieAuthFileGroupReadable 1
+
+ClientOnly 1
+ExitPolicy reject *:*
+
+# Onion descriptors can be slow to arrive; give them room.
+CircuitStreamTimeout 120
+SocksTimeout 120
+
+# If your network blocks or throttles connections to Tor relays — the symptom is
+# bootstrap stalling at 10-25% — uncomment these and add bridges from
+# https://bridges.torproject.org/ (obfs4 traffic does not look like TLS).
+# UseBridges 1
+# ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy
+# Bridge obfs4 <ip>:<port> <fingerprint> cert=<cert> iat-mode=0
