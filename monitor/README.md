@@ -112,6 +112,22 @@ Windows (x86_64/i686/aarch64), needs no root, and writes nothing outside
 `data/`. `lyrebird` (obfs4) comes with it, so bridges work with no extra
 install.
 
+If bootstrap **stalls below 25%**, the network is throttling or blocking
+connections to Tor relays:
+
+```bash
+itd tor up --bridges meek        # try this first
+itd tor up --bridges snowflake
+itd tor up --bridges obfs4
+```
+
+`--bridges meek` tunnels Tor inside ordinary HTTPS to a CDN. On a network where
+normal web traffic is fine but sustained relay TLS is starved, it is usually the
+only transport that gets through — verified: direct Tor stalled at 20–30%
+indefinitely on the network this was built on, and meek bootstrapped to 100% in
+under two minutes. Bridge lines come from the Expert Bundle itself, so there is
+nothing to fetch and no captcha.
+
 `itd tor up` runs it as a managed child process on free ports, with its own
 `torrc` and data directory, and streams bootstrap:
 

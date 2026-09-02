@@ -263,3 +263,55 @@ def test_bootstrap_timeout_is_honoured_when_tor_goes_quiet(settings, monkeypatch
 
 def test_stop_reports_when_nothing_was_running(settings):
     assert tm.ManagedTor(settings=settings).stop() is False
+
+
+# ------------------------------------------------------------------- bridges
+
+
+def _install_with_bridges(settings, monkeypatch, config: str):
+    payload = _bundle_bytes()
+    _patch_http(monkeypatch, payload, hashlib.sha256(payload).hexdigest())
+    install = tm.install(settings)
+    (install.pluggable_transports / "pt_config.json").write_text(config)
+    return install
+
+
+def test_bundled_bridges_are_read_from_the_expert_bundle(settings, monkeypatch):
+    _install_with_bridges(
+        settings, monkeypatch,
+        '{"bridges": {"meek": ["meek_lite 192.0.2.20:80 url=https://x front=y"],'
+        ' "obfs4": ["obfs4 1.2.3.4:443 ABC cert=z iat-mode=0"]}}',
+    )
+    assert tm.bundled_bridges(settings, "meek")[0].startswith("meek_lite")
+    assert len(tm.bundled_bridges(settings, "obfs4")) == 1
+    assert tm.bundled_bridges(settings, "snowflake") == []
+
+
+def test_bundled_bridges_are_empty_without_an_install(settings):
+    settings.ensure_dirs()
+    assert tm.bundled_bridges(settings, "meek") == []
+
+
+def test_malformed_pt_config_yields_no_bridges(settings, monkeypatch):
+    _install_with_bridges(settings, monkeypatch, "{not json")
+    assert tm.bundled_bridges(settings, "meek") == []
+
+
+def test_snowflake_bridges_get_their_own_transport_line(settings, monkeypatch):
+    install = _install_with_bridges(settings, monkeypatch, "{}")
+    settings.tor_bridges = ["snowflake 192.0.2.3:80 ABC url=https://x fronts=y"]
+    text = tm.ManagedTor(settings=settings).write_torrc(1, 2, install).read_text()
+
+    assert "UseBridges 1" in text
+    assert "ClientTransportPlugin snowflake exec" in text
+    assert "Bridge snowflake 192.0.2.3:80" in text
+
+
+def test_meek_bridges_use_the_lyrebird_transport_line(settings, monkeypatch):
+    install = _install_with_bridges(settings, monkeypatch, "{}")
+    settings.tor_bridges = ["meek_lite 192.0.2.20:80 url=https://x front=y"]
+    text = tm.ManagedTor(settings=settings).write_torrc(1, 2, install).read_text()
+
+    assert "meek_lite" in text
+    assert "lyrebird" in text
+    assert "ClientTransportPlugin snowflake" not in text   # not requested

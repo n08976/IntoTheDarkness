@@ -36,7 +36,14 @@ from .scrapers import available as scraper_names
 from .scrapers.suggest import suggest as suggest_selectors
 from .storage import Repository, SnapshotStore, get_db
 from .tor import find_socks, is_onion, probe_socks, redact, validate_onion
-from .tor_manager import ManagedTor, TorInstallError, TorLaunchError, resolve_binary
+from .tor_manager import (
+    BRIDGE_PRESETS,
+    ManagedTor,
+    TorInstallError,
+    TorLaunchError,
+    bundled_bridges,
+    resolve_binary,
+)
 from .tor_manager import install as install_tor
 from .tor_manager import installed as tor_installed
 
@@ -1566,11 +1573,33 @@ def tor_install(
 @tor_app.command("up")
 def tor_up(
     timeout: float = typer.Option(None, "--timeout", help="Seconds to wait for bootstrap."),
+    bridges: str = typer.Option(
+        None, "--bridges", "-b",
+        help="Use built-in bridges: meek, snowflake or obfs4. Try meek first.",
+    ),
     socks_port: int = typer.Option(None, "--socks-port"),
     control_port: int = typer.Option(None, "--control-port"),
 ) -> None:
-    """Start a managed Tor and wait for it to build a circuit."""
+    """Start a managed Tor and wait for it to build a circuit.
+
+    If bootstrap stalls below 25%, the network is throttling or blocking
+    connections to Tor relays. Retry with --bridges meek: it tunnels Tor inside
+    ordinary HTTPS to a CDN, which usually survives exactly that.
+    """
     settings = get_settings()
+
+    if bridges:
+        if bridges not in BRIDGE_PRESETS:
+            _fail(f"--bridges must be one of {', '.join(BRIDGE_PRESETS)}")
+        lines = bundled_bridges(settings, bridges)
+        if not lines:
+            _fail(
+                f"no built-in {bridges} bridges found — run `itd tor install` "
+                "to fetch the Expert Bundle that carries them"
+            )
+        settings.tor_bridges = lines
+        console.print(f"[dim]using {len(lines)} built-in {bridges} bridge(s)[/dim]")
+
     managed = ManagedTor(settings=settings)
 
     already = managed.running_ports()
@@ -1603,6 +1632,11 @@ def tor_up(
             control_port=control_port,
         )
     except TorLaunchError as exc:
+        if not bridges:
+            err.print(
+                "[dim]Stalled below 25%? This network probably throttles Tor "
+                "relays. Retry with: [bold]itd tor up --bridges meek[/bold][/dim]"
+            )
         _fail(exc)
 
     console.print(f"\n[green]✓[/green] bootstrapped (socks {socks}, control {control})")

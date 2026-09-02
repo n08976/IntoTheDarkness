@@ -40,6 +40,16 @@ FALLBACK_VERSION = "15.0.21"
 
 BOOTSTRAP_RE = re.compile(r"Bootstrapped (\d+)%(?: \(([^)]*)\))?(?::\s*(.*))?")
 
+# Tor Browser's built-in bridges, shipped inside the Expert Bundle at
+# tor/pluggable_transports/pt_config.json. Public and well known, so a censor
+# that actively blocks Tor will likely block these too — but they are the right
+# first thing to try on a network that *throttles* rather than blocks.
+#
+# meek_lite tunnels Tor inside ordinary HTTPS to a CDN. On networks where normal
+# web traffic is fine but sustained relay TLS is starved, it is usually the only
+# transport that gets through — verified to bootstrap where direct Tor could not.
+BRIDGE_PRESETS = ("meek", "snowflake", "obfs4")
+
 
 class TorInstallError(RuntimeError):
     """The bundled Tor could not be fetched, verified, or unpacked."""
@@ -126,6 +136,24 @@ class Install:
         else:
             env["LD_LIBRARY_PATH"] = lib + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         return env
+
+
+def bundled_bridges(settings: Settings | None = None, kind: str = "meek") -> list[str]:
+    """Read Tor Browser's default bridges out of the installed Expert Bundle."""
+    import json
+
+    local = installed(settings)
+    if local is None or local.pluggable_transports is None:
+        return []
+    config = local.pluggable_transports / "pt_config.json"
+    if not config.is_file():
+        return []
+    try:
+        data = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    bridges = (data.get("bridges") or {}).get(kind) or []
+    return [str(b) for b in bridges if isinstance(b, str)]
 
 
 def install_root(settings: Settings | None = None) -> Path:
@@ -360,7 +388,13 @@ class ManagedTor:
                         break
             if lyrebird is not None:
                 lines.append("UseBridges 1")
-                lines.append(f"ClientTransportPlugin obfs4,meek_lite,webtunnel exec {lyrebird}")
+                lines.append(
+                    "ClientTransportPlugin "
+                    f"meek_lite,obfs2,obfs3,obfs4,scramblesuit,webtunnel exec {lyrebird}"
+                )
+                # snowflake is served by the same binary under a different name.
+                if any(b.split()[0] == "snowflake" for b in bridges):
+                    lines.append(f"ClientTransportPlugin snowflake exec {lyrebird}")
                 lines.extend(f"Bridge {bridge}" for bridge in bridges)
             else:
                 log.warning("bridges configured but no pluggable transport binary was found")

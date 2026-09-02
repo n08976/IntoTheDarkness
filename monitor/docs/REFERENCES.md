@@ -155,6 +155,20 @@ not routing / usable.
 
 This was a real bug in an earlier version of this tool.
 
+### meek bridges beat relay throttling — measured, not theorised
+Direct Tor never passed 30% on the network this was built on. The same binary,
+with the Expert Bundle's built-in **meek_lite** bridge, bootstrapped to 100% in
+**1m54s** and established a working circuit (exit `192.42.116.116`).
+
+meek_lite tunnels Tor inside ordinary HTTPS requests to a CDN. That is precisely
+the traffic class the network left alone, which is why it worked where obfs4
+(deliberately random-looking) would likely not have. The rule of thumb: when the
+symptom is *throttling* rather than *blocking*, pick the transport that looks
+most like ordinary web browsing, not the one that looks like noise.
+
+Bridge lines ship inside the bundle (`pluggable_transports/pt_config.json`), so
+`itd tor up --bridges meek` needs no captcha, no email, and no BridgeDB scrape.
+
 ### Bootstrap stalling below 25% means relay throttling
 Observed directly while building this: TCP to relays connected fine, TLS
 handshakes to relay ORPorts took **131 seconds** or timed out, and bootstrap
