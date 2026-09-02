@@ -22,6 +22,7 @@ DEFAULT_SECTORS: dict[str, list[str]] = {
         "health", "hospital", "clinic", "medical", "medic", "dental", "pharma",
         "care center", "care centre", "surgery", "orthope", "pediatric",
         "paediatric", "diagnostic", "radiolog", "oncolog", "nursing", "hospice",
+        "eye care", "optical", "optometr", "bioresearch", "biotech",
     ],
     "education": [
         "school", "university", "college", "academy", "institute", "campus",
@@ -32,7 +33,7 @@ DEFAULT_SECTORS: dict[str, list[str]] = {
         "council", "state of", "agency", "bureau", "police", "court",
     ],
     "finance": [
-        "bank", "credit union", "capital", "financial", "finance", "insur",
+        "bank", "credit union", "fcu", "capital", "financial", "finance", "insur",
         "invest", "asset", "wealth", "mortgage", "lending", "accounting",
         "tax", "audit",
     ],
@@ -112,12 +113,24 @@ class SectorClassifier:
         }
         return cls(sectors=sectors or dict(DEFAULT_SECTORS))
 
-    def classify(self, name: str, context: str = "") -> str:
-        """Label a company. The name is authoritative; context only breaks ties."""
+    def classify(self, name: str, context: str = "", use_context: bool = False) -> str:
+        """Label a company from its name.
+
+        ``context`` is consulted only when ``use_context`` is set, and it is off
+        by default because on a leak site the surrounding text describes *the
+        stolen data*, not the victim's industry. Measured against a live listing:
+        a construction firm whose description ended "...as well as financial
+        documents" was labelled `finance`, and a law firm was labelled `finance`
+        because family-law work mentions "asset division".
+
+        A wrong label is worse than none — sector filtering routes alerts, so a
+        mislabelled victim goes to the wrong place silently. `unknown` is the
+        honest answer when the name carries no signal.
+        """
         for sector, _keyword, pattern in self._compiled:
             if pattern.search(name):
                 return sector
-        if context:
+        if context and use_context:
             for sector, _keyword, pattern in self._compiled:
                 if pattern.search(context):
                     return sector

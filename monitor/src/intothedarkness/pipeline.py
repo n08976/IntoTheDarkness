@@ -91,7 +91,9 @@ class Pipeline:
         """Bound the stored body and make sure every item carries a sector."""
         item = item.truncated(self.settings.max_item_text)
         if "sector" not in item.fields:
-            label = target.sector or self.classifier.classify(item.title, item.text)
+            label = target.sector or self.classifier.classify(
+                item.title, item.text, use_context=self.settings.sector_use_context
+            )
             item.fields["sector"] = label
         return item
 

@@ -115,3 +115,29 @@ def test_suggested_selectors_actually_work_with_the_dls_scraper():
     items = scraper.scrape(target)
 
     assert [i.title for i in items] == [f"Org {i} Ltd" for i in range(1, 7)]
+
+
+def test_repeated_metadata_rows_do_not_outrank_the_name_heading():
+    """Regression, from a real leak site.
+
+    Each entry carried three `p.row` metadata lines and one `h3.name`. Scoring
+    coverage as occurrences/entries gave the rows 3.0 and the heading 1.0, so
+    the rows won and the extracted "titles" were file sizes and addresses.
+    Coverage is the fraction of entries containing the selector, and selectors
+    appearing several times per entry are rows, not names.
+    """
+    entries = "".join(
+        f'<div class="pub">'
+        f'<h3 class="name">Company {i}</h3>'
+        f'<div class="extra">'
+        f'<p class="row">www.company{i}.com</p>'
+        f'<p class="row">{i} Some Street, Somewhere</p>'
+        f'<p class="row">{i}.5 GB</p>'
+        f"</div></div>"
+        for i in range(1, 13)
+    )
+    top = suggest(f"<html><body>{entries}</body></html>")[0]
+
+    assert top.item == "div.pub"
+    assert top.title == "h3.name"
+    assert top.samples[0] == "Company 1"

@@ -128,3 +128,38 @@ def test_missing_item_selector_is_a_clear_error():
 
 def test_company_is_carried_in_fields():
     assert scrape()[0].fields["company"] == "ACME Steel Ltd"
+
+
+# ---------------------------------------------------- regressions from live data
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("www.rubbermill.com", "Rubbermill"),
+        ("rubbermill.com", "Rubbermill"),
+        ("http://www.acme-steel.co.uk", "Acme Steel"),
+    ],
+)
+def test_bare_domain_names_become_the_domain_label(raw, expected):
+    """A real listing gave the victim's domain as its name.
+
+    URL-stripping consumed the whole thing and left the stub "www", which was
+    then reported as a victim.
+    """
+    assert normalize_name(raw) == expected
+
+
+@pytest.mark.parametrize("stub", ["www", "http", "com", "  www  "])
+def test_url_stubs_are_not_victims(stub):
+    assert normalize_name(stub) == ""
+
+
+def test_stub_names_are_skipped_by_the_scraper():
+    html = (
+        '<html><body>'
+        '<div class="victim-card"><h3>www</h3><p class="description">x</p></div>'
+        '<div class="victim-card"><h3>Real Company Ltd</h3><p class="description">y</p></div>'
+        "</body></html>"
+    )
+    assert [i.title for i in scrape(html)] == ["Real Company Ltd"]

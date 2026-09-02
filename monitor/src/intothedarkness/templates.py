@@ -121,36 +121,41 @@ rules:
   #   action: ignore
 '''
 
-EXAMPLE_SECTORS = '''\
-# Industry sectors, matched case-insensitively against the organisation name
-# (and its surrounding text as a fallback). Longer keywords win ties, and
-# anything unmatched is reported as "unknown" rather than guessed at.
-#
-# This file is optional: delete it to use the built-in vocabulary, or edit it
-# to fit the sectors you actually report on. `itd sector classify "Some Co"`
-# tries a name against the current list.
+def _sectors_template() -> str:
+    """Build the sectors file from the code's own defaults.
 
-sectors:
-  healthcare:
-    [health, hospital, clinic, medical, dental, pharma, surgery, nursing]
-  education:
-    [school, university, college, academy, institute, education, district]
-  government:
-    ["city of", county, municipal, ministry, "department of", council, police]
-  finance:
-    [bank, "credit union", capital, financial, insur, invest, mortgage]
-  legal: [law, legal, attorney, solicitor, llp]
-  manufacturing: [manufactur, industri, factory, steel, machin, engineering]
-  technology: [software, technolog, systems, digital, cyber, cloud, telecom]
-  energy: [energy, oil, gas, solar, electric, power, utility, mining]
-  transport: [logistic, transport, shipping, freight, airline, railway]
-  retail: [retail, store, market, grocery, fashion, apparel]
-  construction: [construct, building, contractor, roofing, concrete, architect]
-  hospitality: [hotel, resort, restaurant, catering, casino, travel]
-  nonprofit: [foundation, charity, nonprofit, ngo, society]
-  agriculture: [farm, agri, food, dairy, livestock]
-  media: [media, broadcast, publish, news, press, studio]
-'''
+    Previously this was a hand-written subset of ``DEFAULT_SECTORS``. The two
+    drifted, and since the file *overrides* the built-ins, an install silently
+    ran on the older, shorter keyword list. One source of truth avoids that.
+    """
+    import yaml
+
+    from .enrich.sector import DEFAULT_SECTORS
+
+    header = (
+        "# Industry sectors, matched case-insensitively against the organisation\n"
+        "# name. Longer keywords win ties; anything unmatched is reported as\n"
+        '# "unknown" rather than guessed at.\n'
+        "#\n"
+        "# This file OVERRIDES the built-in list — delete it to track the\n"
+        "# built-ins as they change, or edit it to fit the sectors you report on.\n"
+        "# Try a name against the current list with:\n"
+        '#   itd sector classify "Some Company Ltd"\n'
+        "#\n"
+        "# Surrounding text is deliberately NOT consulted: on a leak site it\n"
+        "# describes the stolen data, not the victim's industry. Set\n"
+        "# ITD_SECTOR_USE_CONTEXT=true to change that.\n\n"
+    )
+    body = yaml.safe_dump(
+        {"sectors": {k: list(v) for k, v in DEFAULT_SECTORS.items()}},
+        sort_keys=False,
+        default_flow_style=False,
+        width=88,
+    )
+    return header + body
+
+
+EXAMPLE_SECTORS = _sectors_template()
 
 ENV_EXAMPLE = '''\
 # Copy to .env and fill in. Every setting is also a plain environment variable.

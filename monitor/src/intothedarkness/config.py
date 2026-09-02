@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     # "hash" records only a digest; "store" writes the body to data/snapshots.
     # Targets may override this. Monitoring hidden services can pull in material
     # you would rather not have on disk, so hashing is the default.
+    # Let surrounding text influence sector labelling. Off by default: on leak
+    # sites that text describes the stolen data, not the victim's industry.
+    sector_use_context: bool = False
     content_mode: str = "hash"
     max_item_text: int = 20_000
     snapshot_max_bytes: int = 10_000_000

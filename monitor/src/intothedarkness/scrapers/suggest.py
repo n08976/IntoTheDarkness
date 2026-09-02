@@ -91,8 +91,14 @@ def _uniformity(nodes: list[Tag]) -> float:
 def _title_candidates(nodes: list[Tag]) -> list[tuple[str, float, list[str]]]:
     """Rank child selectors by how much they look like a name column."""
     counts: dict[str, list[str]] = defaultdict(list)
+    # How many *entries* contain this selector at all — distinct from how many
+    # times it occurs. A row class repeated three times per entry must not score
+    # as three times the coverage, or it outranks the one-per-entry heading that
+    # actually holds the name.
+    entries_with: dict[str, int] = defaultdict(int)
 
     for node in nodes:
+        seen_here: set[str] = set()
         for child in node.find_all(True, recursive=True):
             signature = _signature(child) or child.name
             if signature in ("script", "style"):
@@ -101,12 +107,19 @@ def _title_candidates(nodes: list[Tag]) -> list[tuple[str, float, list[str]]]:
             if not text or len(text) > TITLE_MAX_CHARS:
                 continue
             counts[signature].append(text)
+            seen_here.add(signature)
+        for signature in seen_here:
+            entries_with[signature] += 1
 
     ranked: list[tuple[str, float, list[str]]] = []
     for signature, values in counts.items():
-        coverage = len(values) / max(1, len(nodes))
+        coverage = entries_with[signature] / max(1, len(nodes))
         if coverage < 0.5:
             continue  # must appear in most entries
+        # Selectors occurring several times per entry are rows, not names.
+        repeats = len(values) / max(1, entries_with[signature])
+        if repeats > 1.5:
+            continue
         distinct = len(set(values)) / max(1, len(values))
         lengths = [len(v) for v in values]
         mean_len = sum(lengths) / len(lengths)

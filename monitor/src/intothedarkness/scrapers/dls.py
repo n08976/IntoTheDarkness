@@ -44,9 +44,27 @@ _LEGAL_SUFFIX = re.compile(
 )
 
 
+# A listing sometimes gives the victim's domain instead of its name.
+_BARE_DOMAIN = re.compile(
+    r"^\s*(?:https?://)?(?:www\.)?([a-z0-9][a-z0-9-]{1,62})\.[a-z.]{2,12}\s*$", re.I
+)
+# What is left when URL-stripping eats the whole name.
+_STUB = frozenset({"www", "http", "https", "com", "net", "org", "inc", "ltd"})
+
+
 def normalize_name(raw: str) -> str:
-    """Clean a victim name for display: strip site furniture, keep the name."""
+    """Clean a victim name for display: strip site furniture, keep the name.
+
+    An entry whose "name" is just a domain becomes the domain's own label —
+    `www.rubbermill.com` reads as `Rubbermill`, not as the stub `www` that
+    URL-stripping would otherwise leave behind.
+    """
     text = unicodedata.normalize("NFKC", raw or "")
+
+    domain = _BARE_DOMAIN.match(text)
+    if domain:
+        return domain.group(1).replace("-", " ").title()
+
     text = _URL_IN_NAME.sub(" ", text)
     text = _NOISE.sub(" ", text)
     text = _DATE.sub(" ", text)
@@ -55,6 +73,9 @@ def normalize_name(raw: str) -> str:
     text = _BRACKETS.sub(" ", text)
     text = text.replace("|", " ").replace("•", " ")
     text = _WS.sub(" ", text).strip(" -–—:,.\t\n")
+    # Stripping a URL can consume the whole name; that is not a victim.
+    if text.lower() in _STUB:
+        return ""
     return text
 
 
@@ -132,7 +153,7 @@ class DlsScraper(Scraper):
             if target.sector:
                 fields["sector"] = target.sector
             elif classifier is not None:
-                fields["sector"] = classifier.classify(company, context)
+                fields["sector"] = classifier.classify(company, context)  # context off by default
 
             indicators = ioc.extract(context)
             if indicators:
