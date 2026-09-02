@@ -19,7 +19,7 @@ UNKNOWN = "unknown"
 # A usable starting vocabulary. Override wholesale via config/sectors.yaml.
 DEFAULT_SECTORS: dict[str, list[str]] = {
     "healthcare": [
-        "health", "hospital", "clinic", "medical", "medic", "dental", "pharma",
+        "health", "hospital", "clinic", "medical", "medic", "dental", "dentist", "pharma",
         "care center", "care centre", "surgery", "orthope", "pediatric",
         "paediatric", "diagnostic", "radiolog", "oncolog", "nursing", "hospice",
         "eye care", "optical", "optometr", "bioresearch", "biotech",

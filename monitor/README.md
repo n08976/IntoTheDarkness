@@ -68,6 +68,32 @@ Four scrapers ship in the box:
   maps dotted paths onto `key`/`title`/`url`/`text` plus any extras you name.
 - **`dls`** — leak-site victim listings. Keys on the *normalised company name*,
   not the URL, so a site that rotates onion addresses doesn't re-report everyone.
+- **`embedded`** — records from JSON a JavaScript app left in its own HTML
+  (Inertia `data-page`, Next.js `__NEXT_DATA__`, Nuxt `window.__NUXT__`).
+
+### An empty page is not necessarily a browser problem
+
+A single-page app serves an empty `<body>` and builds the page with JavaScript,
+so an HTTP fetch appears to return nothing. But most such apps ship their
+initial state as JSON *inside that same HTML* — the records are already in the
+bytes you fetched.
+
+One live leak site looked unscrapeable this way. Its victim list turned out to
+be 42 entries in an Inertia `data-page` payload, extracted with no browser at
+all:
+
+```yaml
+  - name: dls-everest
+    scraper: embedded
+    json_path: "props.categories"
+    json_fields: { key: id, title: title, published: date }
+```
+
+This matters beyond convenience. A headless browser is a second network stack
+that has to be routed through Tor correctly, with its own fingerprint and its
+own leak surface. Check for embedded JSON before reaching for one — the
+`embedded` scraper names the payloads it found when a path misses, and says
+plainly when a page *genuinely* has no data in it.
 
 Add your own by dropping a function in `scrapers/`:
 
