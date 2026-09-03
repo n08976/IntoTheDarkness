@@ -103,7 +103,9 @@
         { "title": "marktsec/Ransomware_Official_Domains (GitHub)", "url": "https://github.com/marktsec/Ransomware_Official_Domains" },
         { "title": "alecmuffett/real-world-onion-sites (GitHub)", "url": "https://github.com/alecmuffett/real-world-onion-sites" },
         { "title": "APT Groups and Operations (Google Sheets)", "url": "https://docs.google.com/spreadsheets/d/1H9_xaxQHpWaa4O_Son4Gx0YOIzlcBWMsdvePFX68EKU/edit?gid=376438690#gid=376438690" },
-        { "title": "RansomLook", "url": "https://www.ransomlook.io/" }
+        { "title": "RansomLook", "url": "https://www.ransomlook.io/" },
+        { "title": "SOCRadar — Healthcare Data Breaches", "url": "https://socradar.io/data-breach/healthcare/" },
+        { "title": "SOCRadar — Data Breaches by Industry", "url": "https://socradar.io/data-breach/industry/" }
       ]
     },
     {
