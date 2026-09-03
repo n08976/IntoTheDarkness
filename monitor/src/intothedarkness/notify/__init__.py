@@ -5,6 +5,7 @@ from .console import ConsoleNotifier
 from .email import EmailNotifier
 from .preview import PreviewNotifier
 from .render import render_html, render_subject, render_text
+from .resend import ResendNotifier
 from .webhook import WebhookNotifier
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "EmailNotifier",
     "Message",
     "PreviewNotifier",
+    "ResendNotifier",
     "Notifier",
     "WebhookNotifier",
     "available",

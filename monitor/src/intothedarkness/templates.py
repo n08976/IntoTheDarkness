@@ -172,7 +172,17 @@ ITD_REQUEST_TIMEOUT=20
 ITD_PER_HOST_DELAY=1.0
 ITD_RESPECT_ROBOTS=true
 
-# --- email -------------------------------------------------------------------
+# --- email: Resend (preferred) -----------------------------------------------
+# An HTTPS API call, so no STARTTLS negotiation and no certificate-name traps.
+# ITD_RESEND_API_KEY=re_...
+# ITD_EMAIL_FROM=IntoTheDarkness <itd@yourdomain.com>
+# ITD_EMAIL_TO=["you@example.com"]
+
+# --- email: SMTP (alternative) -----------------------------------------------
+# On shared cPanel hosting, connect to the SERVER's hostname, not your domain —
+# the domain's certificate does not cover the mail host and verification fails.
+#   host premium215.web-hosting.com, port 587, STARTTLS, auth on
+# Sending is refused outright if the server does not offer STARTTLS.
 ITD_SMTP_HOST=smtp.example.com
 ITD_SMTP_PORT=587
 ITD_SMTP_USER=

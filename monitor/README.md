@@ -606,14 +606,33 @@ adds `email` cannot quietly send something you asked only to preview.
 
 ## Alerting
 
-Configure channels via environment or `.env` (see `.env.example`):
+Channels: `console`, `preview`, `resend`, `email`, `webhook`.
+
+**Resend is the recommended path** — an HTTPS API call, so no STARTTLS
+negotiation and none of the certificate-name traps that make shared-hosting SMTP
+fragile:
 
 ```bash
-ITD_SMTP_HOST=smtp.example.com
-ITD_EMAIL_FROM=itd@example.com
+ITD_RESEND_API_KEY=re_...
+ITD_EMAIL_FROM='IntoTheDarkness <itd@yourdomain.com>'
 ITD_EMAIL_TO='["you@example.com"]'    # JSON list
-ITD_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
+
+SMTP works too:
+
+```bash
+ITD_SMTP_HOST=premium215.web-hosting.com   # the SERVER's hostname
+ITD_SMTP_PORT=587
+ITD_SMTP_USER=noreply@yourdomain.com
+ITD_SMTP_PASSWORD=...
+```
+
+On shared cPanel hosting, point `ITD_SMTP_HOST` at the **server's own
+hostname**, not your domain or `mail.<domain>` — the domain's certificate does
+not cover the mail host, and verification fails with an error most clients
+misreport. Sending is **refused outright** if the server does not offer
+STARTTLS, rather than downgrading to plaintext: victim names should not cross an
+unencrypted link.
 
 Then `itd notify-test --channel email` to prove it works before relying on it.
 

@@ -91,6 +91,10 @@ class Settings(BaseSettings):
     email_from: str = ""
     email_to: list[str] = Field(default_factory=list)
 
+    # Resend HTTP API — the house pattern in this operator's other projects,
+    # and less fragile than shared-hosting SMTP.
+    resend_api_key: str = ""
+
     # Generic webhook sink
     webhook_url: str = ""
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import smtplib
 from email.message import EmailMessage
 
@@ -44,10 +45,21 @@ class EmailNotifier(Notifier):
         try:
             server.ehlo()
             if s.smtp_starttls and not s.smtp_ssl:
-                server.starttls()
-                server.ehlo()
+                try:
+                    server.starttls()
+                    server.ehlo()
+                except smtplib.SMTPNotSupportedError:
+                    # Fail closed. Never put credentials or victim names on an
+                    # unencrypted connection because the server declined to
+                    # upgrade; abort and say why.
+                    raise RuntimeError(
+                        f"{s.smtp_host}:{s.smtp_port} does not support STARTTLS; "
+                        "refusing to send unencrypted. Use port 465 with "
+                        "ITD_SMTP_SSL=true, or a host whose certificate is valid."
+                    ) from None
             if s.smtp_user:
                 server.login(s.smtp_user, s.smtp_password)
             server.send_message(msg)
         finally:
-            server.quit()
+            with contextlib.suppress(smtplib.SMTPException, OSError):
+                server.quit()

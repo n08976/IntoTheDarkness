@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -185,3 +187,88 @@ def test_preview_escapes_scraped_content_in_the_subject(settings):
     html = notifier.last_path.read_text(encoding="utf-8")
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+# --------------------------------------------------------------------- resend
+
+
+def test_resend_reports_what_is_missing(settings):
+    notifier = get_notifier("resend", settings)
+    assert "RESEND_API_KEY" in notifier.available()[1]
+
+    settings.resend_api_key = "re_test"
+    assert "EMAIL_FROM" in notifier.available()[1]
+
+    settings.email_from = "itd@example.com"
+    assert "EMAIL_TO" in notifier.available()[1]
+
+    settings.email_to = ["you@example.com"]
+    assert notifier.available()[0]
+
+
+def test_resend_refuses_to_send_when_unconfigured(settings):
+    with pytest.raises(RuntimeError, match="unavailable"):
+        get_notifier("resend", settings).send(sample_message())
+
+
+@respx.mock
+def test_resend_posts_the_expected_payload(settings):
+    settings.resend_api_key = "re_test"
+    settings.email_from = "itd@example.com"
+    settings.email_to = ["a@example.com", "b@example.com"]
+    route = respx.post("https://api.resend.com/emails").mock(
+        return_value=httpx.Response(200, json={"id": "abc"})
+    )
+
+    get_notifier("resend", settings).send(sample_message())
+
+    request = route.calls[0].request
+    assert request.headers["authorization"] == "Bearer re_test"
+    body = json.loads(request.read())
+    assert body["from"] == "itd@example.com"
+    assert body["to"] == ["a@example.com", "b@example.com"]
+    assert "Alpha" in body["text"]
+    assert "https://e.com/1" in body["html"]
+
+
+@respx.mock
+def test_resend_surfaces_the_response_body_on_failure(settings):
+    """The status alone sends people hunting in the wrong place; the body says
+    whether it was an unverified domain or a bad key."""
+    settings.resend_api_key = "re_test"
+    settings.email_from = "itd@example.com"
+    settings.email_to = ["you@example.com"]
+    respx.post("https://api.resend.com/emails").mock(
+        return_value=httpx.Response(403, text="The example.com domain is not verified")
+    )
+    with pytest.raises(RuntimeError, match="not verified"):
+        get_notifier("resend", settings).send(sample_message())
+
+
+@respx.mock
+def test_resend_transport_errors_are_wrapped(settings):
+    settings.resend_api_key = "re_test"
+    settings.email_from = "itd@example.com"
+    settings.email_to = ["you@example.com"]
+    respx.post("https://api.resend.com/emails").mock(side_effect=httpx.ConnectError("down"))
+    with pytest.raises(RuntimeError, match="request failed"):
+        get_notifier("resend", settings).send(sample_message())
+
+
+def test_smtp_fails_closed_when_starttls_is_unavailable(mail_settings, monkeypatch):
+    """Never put credentials or victim names on an unencrypted connection
+    because the server declined to upgrade."""
+    import smtplib
+
+    class NoStartTLS(FakeSMTP):
+        def starttls(self):
+            raise smtplib.SMTPNotSupportedError("no STARTTLS here")
+
+    monkeypatch.setattr("smtplib.SMTP", NoStartTLS)
+    with pytest.raises(RuntimeError, match="refusing to send unencrypted"):
+        get_notifier("email", mail_settings).send(sample_message())
+
+    server = FakeSMTP.instances[0]
+    assert server.login_args is None      # credentials never offered
+    assert server.messages == []          # nothing sent
+    assert server.quit_called             # connection still closed
