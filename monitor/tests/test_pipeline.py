@@ -235,3 +235,54 @@ def test_run_target_returns_findings_and_item_count(settings, repo):
         FEED[:] = [("a", "Alpha"), ("b", "Beta")]
         findings, count = p.run_target(target(), fetcher)
         assert count == 2 and len(findings) == 1
+
+
+def test_upstream_sector_label_beats_the_keyword_guess(settings, repo):
+    """An aggregator that states the industry is better evidence than our guess."""
+    from intothedarkness.models import Item
+
+    class Supplied(Scraper):
+        name = "supplied"
+
+        def scrape(self, target):
+            return [
+                # Upstream says finance; the name alone would say nothing.
+                Item(key="a", target=target.name, title="Paylogix",
+                     fields={"sector": "Financial Services"}),
+                # Upstream says nothing useful; fall back to the name.
+                Item(key="b", target=target.name, title="Mercy Hospital",
+                     fields={"sector": "Not Found"}),
+                # No label at all; fall back to the name.
+                Item(key="c", target=target.name, title="Acme Steel Manufacturing"),
+            ]
+
+    SCRAPERS["supplied"] = Supplied
+    try:
+        p = pipeline(settings, repo)
+        items = p.scrape_target(target(scraper="supplied"), None)
+        sectors = {i.title: i.sector for i in items}
+    finally:
+        SCRAPERS.pop("supplied", None)
+
+    assert sectors["Paylogix"] == "finance"                    # normalised, not guessed
+    assert sectors["Mercy Hospital"] == "healthcare"           # fell back to the name
+    assert sectors["Acme Steel Manufacturing"] == "manufacturing"
+
+
+def test_target_sector_still_overrides_everything(settings, repo):
+    from intothedarkness.models import Item
+
+    class Supplied(Scraper):
+        name = "supplied2"
+
+        def scrape(self, target):
+            return [Item(key="a", target=target.name, title="Paylogix",
+                         fields={"sector": "Financial Services"})]
+
+    SCRAPERS["supplied2"] = Supplied
+    try:
+        p = pipeline(settings, repo)
+        items = p.scrape_target(target(scraper="supplied2", sector="defence"), None)
+    finally:
+        SCRAPERS.pop("supplied2", None)
+    assert items[0].sector == "defence"

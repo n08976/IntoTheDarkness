@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
-from .enrich import SectorClassifier
+from .enrich import SectorClassifier, normalize_sector
 from .models import Finding, FindingKind, Item, Severity, Target
 from .notify import Message, get_notifier, render_html, render_subject, render_text
 from .scrapers import Fetcher, get_scraper
@@ -90,11 +90,24 @@ class Pipeline:
     def _enrich(self, target: Target, item: Item) -> Item:
         """Bound the stored body and make sure every item carries a sector."""
         item = item.truncated(self.settings.max_item_text)
-        if "sector" not in item.fields:
-            label = target.sector or self.classifier.classify(
-                item.title, item.text, use_context=self.settings.sector_use_context
-            )
-            item.fields["sector"] = label
+
+        if target.sector:
+            item.fields["sector"] = target.sector
+            return item
+
+        # A source that states the industry is better evidence than our keyword
+        # guess, so normalise its label onto our vocabulary and keep it.
+        supplied = normalize_sector(item.fields.get("sector"))
+        if supplied:
+            item.fields["sector"] = supplied
+            return item
+
+        # Anything else — absent, "unknown", or an upstream label we do not
+        # recognise ("Not Found", "Other") — is replaced rather than kept, so a
+        # foreign vocabulary never leaks into sector filtering.
+        item.fields["sector"] = self.classifier.classify(
+            item.title, item.text, use_context=self.settings.sector_use_context
+        )
         return item
 
     def content_mode(self, target: Target) -> str:

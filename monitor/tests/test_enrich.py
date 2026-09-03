@@ -162,3 +162,33 @@ def test_generated_sectors_template_matches_the_code_defaults():
     assert parsed.keys() == DEFAULT_SECTORS.keys()
     for name, keywords in DEFAULT_SECTORS.items():
         assert parsed[name] == list(keywords)
+
+
+# ------------------------------------------- upstream-supplied sector labels
+
+
+@pytest.mark.parametrize(
+    "label,expected",
+    [
+        ("Financial Services", "finance"),
+        ("Manufacturing", "manufacturing"),
+        ("Retail & E-Commerce", "retail"),
+        ("Government & Defense", "government"),
+        ("Agriculture and Food Production", "agriculture"),
+        ("  HEALTHCARE  ", "healthcare"),
+        ("healthcare", "healthcare"),
+    ],
+)
+def test_upstream_labels_map_onto_our_vocabulary(label, expected):
+    from intothedarkness.enrich import normalize_sector
+
+    assert normalize_sector(label) == expected
+
+
+@pytest.mark.parametrize("label", ["Not Found", "Other", "Unknown", "", None, "Wombats"])
+def test_meaningless_upstream_labels_fall_through(label):
+    """Returning None lets the caller classify the name instead of inventing a
+    one-off sector that would fragment filtering."""
+    from intothedarkness.enrich import normalize_sector
+
+    assert normalize_sector(label) is None

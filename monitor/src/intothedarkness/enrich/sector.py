@@ -72,6 +72,55 @@ DEFAULT_SECTORS: dict[str, list[str]] = {
 }
 
 
+# Aggregators label industry themselves. Their label is better evidence than
+# our keyword guess, so it is mapped onto our vocabulary rather than discarded
+# or re-derived. Unmapped labels fall through to `unknown` rather than being
+# invented as new sectors, which would fragment filtering.
+SECTOR_ALIASES: dict[str, str] = {
+    "financial services": "finance", "finance": "finance", "banking": "finance",
+    "insurance": "finance", "accounting": "finance",
+    "healthcare": "healthcare", "health care": "healthcare",
+    "medical": "healthcare", "pharmaceuticals": "healthcare",
+    "manufacturing": "manufacturing", "industrial": "manufacturing",
+    "technology": "technology", "it services": "technology",
+    "telecommunications": "technology", "software": "technology",
+    "education": "education", "transportation": "transport",
+    "logistics": "transport", "shipping": "transport",
+    "retail & e-commerce": "retail", "retail": "retail", "e-commerce": "retail",
+    "agriculture and food production": "agriculture", "agriculture": "agriculture",
+    "food production": "agriculture",
+    "energy & utilities": "energy", "energy": "energy", "utilities": "energy",
+    "government & defense": "government", "government": "government",
+    "defense": "government", "public sector": "government",
+    "hospitality": "hospitality", "travel": "hospitality",
+    "construction": "construction", "real estate": "construction",
+    "legal": "legal", "law": "legal",
+    "media": "media", "entertainment": "media",
+    "non-profit": "nonprofit", "nonprofit": "nonprofit", "ngo": "nonprofit",
+    # Explicit non-answers from upstream.
+    "not found": UNKNOWN, "other": UNKNOWN, "unknown": UNKNOWN, "n/a": UNKNOWN,
+}
+
+
+def normalize_sector(label: str | None) -> str | None:
+    """Map an externally supplied industry label onto our vocabulary.
+
+    Returns ``None`` when the label means nothing to us, so the caller can fall
+    back to classifying the name rather than inventing a one-off sector.
+    """
+    if not label:
+        return None
+    key = " ".join(str(label).strip().lower().split())
+    if not key:
+        return None
+    if key in SECTOR_ALIASES:
+        mapped = SECTOR_ALIASES[key]
+        return None if mapped == UNKNOWN else mapped
+    if key in DEFAULT_SECTORS:
+        return key
+    return None
+
+
 @dataclass
 class SectorClassifier:
     """Longest-keyword-wins matching over a name and optional context text."""

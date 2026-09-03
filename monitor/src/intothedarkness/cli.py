@@ -31,7 +31,7 @@ from .models import Finding, FindingKind, Item, Severity
 from .notify import Message, get_notifier, render_html, render_subject, render_text
 from .notify import available as notify_channels
 from .pipeline import Pipeline
-from .scrapers import Fetcher, get_scraper
+from .scrapers import Fetcher
 from .scrapers import available as scraper_names
 from .scrapers.suggest import suggest as suggest_selectors
 from .storage import Repository, SnapshotStore, get_db
@@ -347,11 +347,13 @@ def targets_test(
     if match is None:
         _fail(f"no target named {name!r}")
 
-    with Fetcher(get_settings()) as fetcher:
+    settings = get_settings()
+    # Run the same enrichment the pipeline does, so what this prints is what a
+    # real run would store — not the raw scraper output.
+    pipeline = Pipeline(settings=settings, classifier=load_sectors(settings.sectors_file))
+    with Fetcher(settings) as fetcher:
         try:
-            scraper = get_scraper(match.scraper, fetcher)
-            scraper.classifier = load_sectors(get_settings().sectors_file)
-            items = scraper.scrape(match)
+            items = pipeline.scrape_target(match, fetcher)
         except Exception as exc:
             _fail(f"{name}: {exc}")
 
@@ -395,8 +397,12 @@ def findings(
 ) -> None:
     """List findings recorded recently."""
     since = datetime.now(UTC) - timedelta(hours=since_hours)
+    # Sector and kind are filtered in Python, so the database limit has to be
+    # widened first — otherwise `--sector x --limit 8` means "x among the 8
+    # newest" rather than "the 8 newest x", and quietly under-reports.
+    fetch = limit if not (kind or sector) else max(limit * 50, 1000)
     rows = _repo().recent_findings(
-        since=since, target=target, min_severity=min_severity, limit=limit
+        since=since, target=target, min_severity=min_severity, limit=fetch
     )
     if kind:
         rows = [r for r in rows if r.kind == kind]
@@ -409,6 +415,7 @@ def findings(
             .lower()
             == wanted
         ]
+    rows = rows[:limit]
 
     if not rows:
         console.print("[dim]no findings[/dim]")

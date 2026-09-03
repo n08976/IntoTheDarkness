@@ -56,3 +56,54 @@ def test_findings_table_escapes_scraped_messages(repo, monkeypatch, capsys):
     out = "".join(capsys.readouterr().out.split())
     assert "[/red]" in out
     assert "[bold]" in out
+
+
+def test_sector_filter_is_not_truncated_by_the_limit(repo, monkeypatch, capsys):
+    """Regression: filters ran after the database limit.
+
+    `--sector healthcare --limit 8` meant "healthcare among the 8 newest"
+    rather than "the 8 newest healthcare", so it silently under-reported.
+    """
+    import intothedarkness.cli as cli
+    from intothedarkness.models import Finding, FindingKind, Item, Severity
+
+    def victim(name, sector):
+        return Finding(
+            kind=FindingKind.BASELINE,
+            target="agg",
+            severity=Severity.HIGH,
+            item=Item(key=name, target="agg", title=name, fields={"sector": sector}),
+        )
+
+    # 40 noise findings recorded after the ones we care about.
+    repo.save_findings([victim(f"Clinic {i}", "healthcare") for i in range(5)])
+    repo.save_findings([victim(f"Widget {i}", "manufacturing") for i in range(40)])
+    monkeypatch.setattr(cli, "_repo", lambda: repo)
+
+    cli.findings(
+        since_hours=24, target=None, min_severity=None,
+        sector="healthcare", kind=None, limit=10,
+    )
+    out = capsys.readouterr().out
+    assert out.count("healthcare") >= 5
+    assert "manufacturing" not in out
+
+
+def test_limit_still_caps_filtered_results(repo, monkeypatch, capsys):
+    import intothedarkness.cli as cli
+    from intothedarkness.models import Finding, FindingKind, Item, Severity
+
+    repo.save_findings([
+        Finding(
+            kind=FindingKind.NEW, target="agg", severity=Severity.HIGH,
+            item=Item(key=f"c{i}", target="agg", title=f"Clinic {i}",
+                      fields={"sector": "healthcare"}),
+        )
+        for i in range(20)
+    ])
+    monkeypatch.setattr(cli, "_repo", lambda: repo)
+    cli.findings(
+        since_hours=24, target=None, min_severity=None,
+        sector="healthcare", kind=None, limit=3,
+    )
+    assert capsys.readouterr().out.count("healthcare") == 3
