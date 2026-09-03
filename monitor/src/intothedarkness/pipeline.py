@@ -24,7 +24,10 @@ class RunReport:
     findings: list[Finding] = field(default_factory=list)
     items_scraped: int = 0
     targets_run: int = 0
-    targets_skipped: int = 0
+    # Disabled and not-yet-due are different states and were reported as one,
+    # so a config mistake looked identical to normal interval gating.
+    targets_disabled: int = 0
+    targets_not_due: int = 0
     errors: dict[str, str] = field(default_factory=dict)
     suppressed: int = 0
     notified: dict[str, int] = field(default_factory=dict)
@@ -41,8 +44,10 @@ class RunReport:
         ]
         if self.suppressed:
             parts.append(f"{self.suppressed} suppressed")
-        if self.targets_skipped:
-            parts.append(f"{self.targets_skipped} not due")
+        if self.targets_not_due:
+            parts.append(f"{self.targets_not_due} not due")
+        if self.targets_disabled:
+            parts.append(f"{self.targets_disabled} disabled")
         if self.errors:
             parts.append(f"{len(self.errors)} error(s)")
         return ", ".join(parts)
@@ -171,10 +176,10 @@ class Pipeline:
         with Fetcher(self.settings) as fetcher:
             for target in targets:
                 if not target.enabled:
-                    report.targets_skipped += 1
+                    report.targets_disabled += 1
                     continue
                 if not self.is_due(target, force):
-                    report.targets_skipped += 1
+                    report.targets_not_due += 1
                     log.debug("target %s not due yet", target.name)
                     continue
 

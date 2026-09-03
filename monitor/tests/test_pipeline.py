@@ -194,13 +194,16 @@ def test_notifier_failure_is_reported_and_leaves_no_cooldown(settings, repo):
 def test_disabled_and_not_due_targets_are_skipped(settings, repo):
     p = pipeline(settings, repo)
     report = p.run([target(enabled=False)])
-    assert report.targets_run == 0 and report.targets_skipped == 1
+    assert report.targets_run == 0
+    assert report.targets_disabled == 1 and report.targets_not_due == 0
 
     FEED[:] = [("a", "Alpha")]
     hourly = target(interval_minutes=60)
     p.run([hourly])
     again = p.run([hourly])
-    assert again.targets_skipped == 1
+    # Not due is reported separately from disabled: a config mistake must not
+    # look like normal interval gating.
+    assert again.targets_not_due == 1 and again.targets_disabled == 0
     assert p.run([hourly], force=True).targets_run == 1
 
 
