@@ -16,6 +16,28 @@ import yaml
 
 UNKNOWN = "unknown"
 
+# Where a sector label came from. Routing on a label is only safe if you can
+# tell an authoritative statement from a guess about a company's name.
+SOURCE_TARGET = "target"      # stated in the target config
+SOURCE_UPSTREAM = "upstream"  # the source published its own industry label
+SOURCE_PROPAGATED = "propagated"  # an authoritative label for the same victim elsewhere
+SOURCE_NAME = "name"          # keyword match on the organisation name
+SOURCE_DOMAIN = "domain"      # keyword match on the victim's domain
+SOURCE_NONE = "none"
+
+# Ordered weakest to strongest; a weaker source never overwrites a stronger one.
+SOURCE_RANK = {
+    SOURCE_NONE: 0,
+    SOURCE_DOMAIN: 1,
+    SOURCE_NAME: 2,
+    SOURCE_PROPAGATED: 3,
+    SOURCE_UPSTREAM: 4,
+    SOURCE_TARGET: 5,
+}
+
+# Sources trustworthy enough to route on without a human reading the name first.
+AUTHORITATIVE = frozenset({SOURCE_TARGET, SOURCE_UPSTREAM, SOURCE_PROPAGATED})
+
 # A usable starting vocabulary. Override wholesale via config/sectors.yaml.
 DEFAULT_SECTORS: dict[str, list[str]] = {
     "healthcare": [
@@ -121,6 +143,30 @@ def normalize_sector(label: str | None) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class SectorResult:
+    """A sector label together with where it came from."""
+
+    sector: str
+    source: str = SOURCE_NONE
+
+    @property
+    def known(self) -> bool:
+        return self.sector != UNKNOWN
+
+    @property
+    def authoritative(self) -> bool:
+        """Whether this is a stated fact rather than a guess about a name."""
+        return self.source in AUTHORITATIVE
+
+    def beats(self, other: SectorResult | None) -> bool:
+        if other is None or not other.known:
+            return True
+        if not self.known:
+            return False
+        return SOURCE_RANK[self.source] > SOURCE_RANK[other.source]
+
+
 @dataclass
 class SectorClassifier:
     """Longest-keyword-wins matching over a name and optional context text."""
@@ -184,6 +230,78 @@ class SectorClassifier:
                 if pattern.search(context):
                     return sector
         return UNKNOWN
+
+    def classify_domain(self, domain: str) -> str:
+        """Classify from a victim's own domain.
+
+        Weaker than the organisation name but often complementary —
+        `stjoeshealth.org` says what `SJH Inc` does not. The TLD alone carries
+        signal only for `.gov` and `.edu`; everything else is read as tokens.
+        """
+        if not domain:
+            return UNKNOWN
+        host = domain.strip().lower().split("/")[0]
+        host = host.removeprefix("www.")
+        if not host or "." not in host:
+            return UNKNOWN
+
+        labels = host.split(".")
+        tld = labels[-1]
+        if tld == "gov" or host.endswith(".gov.uk") or ".gov." in host:
+            return "government"
+        if tld == "edu" or host.endswith(".ac.uk") or ".edu." in host:
+            return "education"
+
+        # Domain labels run words together ("stjoeshealth"), so the word-boundary
+        # anchoring used for names cannot fire. Match as a substring instead, but
+        # only for keywords long enough that an accidental hit is unlikely — the
+        # domain is the weakest signal and must not manufacture false positives.
+        stem = "".join(labels[:-1]).replace("-", "").replace(".", "")
+        for sector, keyword, _pattern in self._compiled:
+            token = keyword.replace(" ", "")
+            if len(token) >= 5 and token in stem:
+                return sector
+        return UNKNOWN
+
+    def resolve(
+        self,
+        name: str,
+        upstream: str | None = None,
+        domain: str = "",
+        target_sector: str | None = None,
+        context: str = "",
+        use_context: bool = False,
+        index=None,
+    ) -> SectorResult:
+        """Best available label, with its provenance.
+
+        Precedence is by strength of evidence: an explicitly configured sector,
+        then a label the source itself published, then the organisation name,
+        then its domain. A guess never displaces a stated fact.
+        """
+        if target_sector:
+            return SectorResult(target_sector, SOURCE_TARGET)
+
+        mapped = normalize_sector(upstream)
+        if mapped:
+            return SectorResult(mapped, SOURCE_UPSTREAM)
+
+        # A source that classifies this same victim elsewhere is a stated fact
+        # about it, not a guess about its name.
+        if index is not None:
+            indexed = index.lookup(name, domain)
+            if indexed and indexed != UNKNOWN:
+                return SectorResult(indexed, SOURCE_PROPAGATED)
+
+        by_name = self.classify(name, context, use_context=use_context)
+        if by_name != UNKNOWN:
+            return SectorResult(by_name, SOURCE_NAME)
+
+        by_domain = self.classify_domain(domain)
+        if by_domain != UNKNOWN:
+            return SectorResult(by_domain, SOURCE_DOMAIN)
+
+        return SectorResult(UNKNOWN, SOURCE_NONE)
 
     def known(self) -> list[str]:
         return sorted(self.sectors)

@@ -164,6 +164,14 @@ class Item(BaseModel):
         value = self.fields.get("sector")
         return str(value) if value else None
 
+    @property
+    def sector_source(self) -> str | None:
+        """Where the sector label came from: target, upstream, propagated,
+        name, domain or none. Routing on a label is only safe if you can tell
+        a stated fact from a guess."""
+        value = self.fields.get("sector_source")
+        return str(value) if value else None
+
     def truncated(self, max_text: int) -> Item:
         """A copy with the body bounded, so one huge page cannot bloat storage."""
         if max_text <= 0 or len(self.text) <= max_text:

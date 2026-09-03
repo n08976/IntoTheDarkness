@@ -160,3 +160,80 @@ def test_a_narrowed_ignore_rule_is_not_a_catch_all():
         Rule(name="drop-noise", action="ignore", match="newsletter"),
     ]
     assert ordering_warnings(narrowed) == []
+
+
+# ------------------------------------------------ default_action and provenance
+
+
+def sourced_finding(name, sector, source) -> Finding:
+    return Finding(
+        kind=FindingKind.NEW,
+        target="dls",
+        item=Item(
+            key=name, target="dls", title=name,
+            fields={"sector": sector, "sector_source": source},
+        ),
+    )
+
+
+def test_default_ignore_keeps_only_what_a_rule_matched():
+    """The direct way to say "only healthcare" — no catch-all, no stop:true."""
+    rules = RuleSet(
+        default_action="ignore",
+        rules=[Rule(name="healthcare-only", sectors=["healthcare"], channels=["email"])],
+    )
+    kept = rules.apply([
+        sourced_finding("Mercy Hospital", "healthcare", "propagated"),
+        sourced_finding("Acme Steel", "manufacturing", "name"),
+        sourced_finding("Zzyzx", "unknown", "none"),
+    ])
+    assert [f.item.title for f in kept] == ["Mercy Hospital"]
+    assert kept[0].channels == ["email"]
+
+
+def test_default_alert_remains_the_old_behaviour():
+    rules = RuleSet(rules=[Rule(name="h", sectors=["healthcare"], channels=["email"])])
+    kept = rules.apply([
+        sourced_finding("Mercy Hospital", "healthcare", "propagated"),
+        sourced_finding("Acme Steel", "manufacturing", "name"),
+    ])
+    assert len(kept) == 2
+
+
+def test_default_ignore_needs_no_stop_true():
+    """The footgun this replaces: without `stop`, a catch-all ignore after a
+    keep-rule swallowed the kept findings too."""
+    rules = RuleSet(
+        default_action="ignore",
+        rules=[
+            Rule(name="keep", sectors=["healthcare"], channels=["email"]),
+            Rule(name="escalate", sectors=["healthcare"], severity=Severity.CRITICAL),
+        ],
+    )
+    kept = rules.apply([sourced_finding("Mercy Hospital", "healthcare", "upstream")])
+    assert len(kept) == 1
+    assert kept[0].severity is Severity.CRITICAL   # later rules still applied
+
+
+def test_sector_source_condition_separates_facts_from_guesses():
+    rules = RuleSet(
+        default_action="ignore",
+        rules=[
+            Rule(
+                name="confirmed", sectors=["healthcare"],
+                sector_sources=["upstream", "propagated"],
+                severity=Severity.CRITICAL, channels=["email"],
+            ),
+        ],
+    )
+    kept = rules.apply([
+        sourced_finding("Cedar Memorial", "healthcare", "propagated"),
+        sourced_finding("Mercy Hospital", "healthcare", "name"),   # only a guess
+    ])
+    assert [f.item.title for f in kept] == ["Cedar Memorial"]
+
+
+def test_findings_without_provenance_never_match_a_source_condition():
+    rules = RuleSet(rules=[Rule(name="r", sector_sources=["upstream"], channels=["email"])])
+    bare = Finding(kind=FindingKind.NEW, target="t", message="no item")
+    assert rules.apply([bare])[0].channels == []

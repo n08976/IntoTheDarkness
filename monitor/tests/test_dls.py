@@ -98,15 +98,23 @@ def test_key_is_the_company_not_the_url():
     assert [i.key for i in first] == [i.key for i in second]
 
 
-def test_sector_is_inferred_per_victim():
-    items = scrape()
-    assert items[0].sector == "manufacturing"
-    assert items[1].sector == "healthcare"
+def test_the_scraper_does_not_label_sectors():
+    """Sector resolution belongs to the pipeline, which knows provenance.
+
+    A guess made in the scraper is indistinguishable from a label the source
+    published, and would be laundered into an authoritative-looking fact.
+    """
+    for item in scrape():
+        assert "sector" not in item.fields
 
 
-def test_target_sector_overrides_the_classifier():
-    items = scrape(target=dls_target(sector="defence"))
-    assert {i.sector for i in items} == {"defence"}
+def test_the_pipeline_labels_what_the_scraper_extracted():
+    from intothedarkness.enrich import SectorClassifier
+
+    classifier = SectorClassifier()
+    titles = [i.title for i in scrape()]
+    assert classifier.resolve(titles[0]).sector == "manufacturing"
+    assert classifier.resolve(titles[1]).sector == "healthcare"
 
 
 def test_indicators_are_extracted_from_context():

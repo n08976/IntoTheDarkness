@@ -106,11 +106,21 @@ def test_extracts_victims_from_an_empty_bodied_spa():
     assert items[0].fields["published"] == "yesterday"
 
 
-def test_sectors_are_labelled_from_the_name():
+def test_the_scraper_does_not_label_sectors():
+    """Sector resolution belongs to the pipeline, which knows provenance."""
     html = inertia_page({"component": "x", "props": {"categories": VICTIMS}})
-    sectors = {i.title: i.sector for i in scrape(html)}
-    assert sectors["CCA Bank"] == "finance"
-    assert sectors["Mansfield Family Dentistry"] == "healthcare"
+    for item in scrape(html):
+        assert "sector" not in item.fields
+
+
+def test_the_pipeline_labels_what_the_scraper_extracted():
+    from intothedarkness.enrich import SectorClassifier
+
+    html = inertia_page({"component": "x", "props": {"categories": VICTIMS}})
+    classifier = SectorClassifier()
+    labels = {i.title: classifier.resolve(i.title).sector for i in scrape(html)}
+    assert labels["CCA Bank"] == "finance"
+    assert labels["Mansfield Family Dentistry"] == "healthcare"
 
 
 def test_keys_are_stable_across_reordering():

@@ -118,7 +118,6 @@ class DlsScraper(Scraper):
                 "selectors.item; it must point at each victim entry"
             )
 
-        classifier = self.classifier
         items: list[Item] = []
         seen: set[str] = set()
 
@@ -150,10 +149,9 @@ class DlsScraper(Scraper):
                 else:
                     fields[field_name] = _text_of(sub)
 
-            if target.sector:
-                fields["sector"] = target.sector
-            elif classifier is not None:
-                fields["sector"] = classifier.classify(company, context)  # context off by default
+            # Sector is resolved by the pipeline, which knows the provenance
+            # rules. A guess made here would be indistinguishable from a label
+            # the source actually published.
 
             indicators = ioc.extract(context)
             if indicators:

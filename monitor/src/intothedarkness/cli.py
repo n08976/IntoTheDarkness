@@ -24,6 +24,8 @@ from .bookmarks import save as save_bookmarks
 from .config import get_settings
 from .discovery import ContentFilter, extra_block_terms, load_engines
 from .discovery import search as run_search
+from .enrich import SectorIndex
+from .enrich import index as sector_index_mod
 from .importers import ransomwatch
 from .investigations import CaseManager
 from .loader import ConfigError, load_rules, load_sectors, load_targets
@@ -179,6 +181,11 @@ def run(
         repo=_repo(),
         classifier=load_sectors(get_settings().sectors_file),
     )
+    if len(pipeline.sector_index):
+        console.print(
+            f"[dim]sector index: {len(pipeline.sector_index)} known victims "
+            f"({', '.join(pipeline.sector_index.sectors)})[/dim]"
+        )
     report = pipeline.run(
         targets, force=force, dry_run=dry_run, notify=not no_notify, preview=preview
     )
@@ -1693,4 +1700,59 @@ def tor_where() -> None:
     ports = managed.running_ports()
     console.print(
         f"running   socks {ports[0]}, control {ports[1]}" if ports else "running   [dim]no[/dim]"
+    )
+
+
+@sector_app.command("index")
+def sector_index(
+    refresh: bool = typer.Option(False, "--refresh", help="Download and rebuild."),
+    sector: list[str] = typer.Option(
+        None, "--sector", "-s", help="Sectors to fetch. Defaults to healthcare."
+    ),
+    delay: float = typer.Option(
+        65.0, "--delay", help="Seconds between requests; the API allows about one a minute."
+    ),
+) -> None:
+    """Show or rebuild the authoritative sector index.
+
+    Keyword-matching a company name leaves most victims unlabelled — measured at
+    61% on one leak site. This downloads victims already classified by sector
+    from ransomware.live, so a name like "Easterseals" resolves to a stated fact
+    rather than a guess.
+
+    The API is rate-limited to roughly one request a minute, so fetching several
+    sectors takes a few minutes. It is cached; a monitoring run never refetches.
+    """
+    settings = get_settings()
+    index = SectorIndex.load(settings)
+
+    if not refresh:
+        if not len(index):
+            console.print(
+                "[dim]no sector index built yet — run "
+                "[bold]itd sector index --refresh[/bold][/dim]"
+            )
+            raise typer.Exit(1)
+        console.print(f"[bold]{len(index)}[/bold] victim name(s), {len(index.domains)} domain(s)")
+        console.print(f"sectors: {escape(', '.join(index.sectors))}")
+        console.print(f"built:   {escape(index.built_at[:19])}")
+        return
+
+    wanted = list(sector) if sector else ["healthcare"]
+    console.print(
+        f"[dim]fetching {len(wanted)} sector(s) at ~{delay:.0f}s apart "
+        "(the API allows about one request a minute)[/dim]\n"
+    )
+    rebuilt = sector_index_mod.build(
+        wanted,
+        existing=index,
+        delay=delay,
+        progress=lambda name, added, detail: console.print(
+            f"  [green]+{added:>5}[/green] {escape(name):16} [dim]{escape(detail)}[/dim]"
+        ),
+    )
+    path = rebuilt.save(settings)
+    console.print(
+        f"\n[green]✓[/green] {len(rebuilt)} victim name(s), "
+        f"{len(rebuilt.domains)} domain(s) -> {path}"
     )

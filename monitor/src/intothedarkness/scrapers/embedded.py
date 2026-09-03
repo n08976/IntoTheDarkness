@@ -181,11 +181,9 @@ class EmbeddedJsonScraper(Scraper):
                     repr(sorted(extra.items()))
                 )
 
+            # Sector resolution belongs to the pipeline; anything set here
+            # would be a guess wearing the source's authority.
             title = str(values.get("title") or "")
-            if target.sector:
-                extra["sector"] = target.sector
-            elif self.classifier is not None:
-                extra["sector"] = self.classifier.classify(title)
 
             items.append(
                 Item(

@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
-from .enrich import SectorClassifier, normalize_sector
+from .enrich import SectorClassifier, SectorIndex
 from .models import Finding, FindingKind, Item, Severity, Target
 from .notify import Message, get_notifier, render_html, render_subject, render_text
 from .scrapers import Fetcher, get_scraper
@@ -55,11 +55,17 @@ class Pipeline:
         repo: Repository | None = None,
         rules: RuleSet | None = None,
         classifier: SectorClassifier | None = None,
+        sector_index: SectorIndex | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.repo = repo or Repository(get_db(self.settings))
         self.rules = rules or RuleSet()
         self.classifier = classifier or SectorClassifier()
+        # Loaded once per run: an authoritative sector lookup, when one has been
+        # built. Absent, resolution falls back to name and domain matching.
+        self.sector_index = (
+            sector_index if sector_index is not None else SectorIndex.load(self.settings)
+        )
         self.snapshots = SnapshotStore(self.settings)
 
     # ------------------------------------------------------------------ scheduling
@@ -91,23 +97,20 @@ class Pipeline:
         """Bound the stored body and make sure every item carries a sector."""
         item = item.truncated(self.settings.max_item_text)
 
-        if target.sector:
-            item.fields["sector"] = target.sector
-            return item
-
-        # A source that states the industry is better evidence than our keyword
-        # guess, so normalise its label onto our vocabulary and keep it.
-        supplied = normalize_sector(item.fields.get("sector"))
-        if supplied:
-            item.fields["sector"] = supplied
-            return item
-
-        # Anything else — absent, "unknown", or an upstream label we do not
-        # recognise ("Not Found", "Other") — is replaced rather than kept, so a
-        # foreign vocabulary never leaks into sector filtering.
-        item.fields["sector"] = self.classifier.classify(
-            item.title, item.text, use_context=self.settings.sector_use_context
+        # Precedence runs by strength of evidence, and the provenance is kept
+        # alongside the label so a routing rule can require a stated fact rather
+        # than a guess about a company's name.
+        result = self.classifier.resolve(
+            name=item.title,
+            upstream=item.fields.get("sector"),
+            domain=str(item.fields.get("domain") or ""),
+            target_sector=target.sector,
+            context=item.text,
+            use_context=self.settings.sector_use_context,
+            index=self.sector_index if len(self.sector_index) else None,
         )
+        item.fields["sector"] = result.sector
+        item.fields["sector_source"] = result.source
         return item
 
     def content_mode(self, target: Target) -> str:

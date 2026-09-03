@@ -28,6 +28,9 @@ class Rule(BaseModel):
     kinds: list[FindingKind] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     sectors: list[str] = Field(default_factory=list)  # industry labels
+    # Restrict to labels of a given provenance, e.g. only accept a sector that
+    # the source itself stated rather than one guessed from the company name.
+    sector_sources: list[str] = Field(default_factory=list)
     match: str | None = None  # regex over title/url/text
     not_match: str | None = None
 
@@ -61,6 +64,10 @@ class Rule(BaseModel):
             sector = finding.item.sector if finding.item else None
             if sector is None or sector.lower() not in {s.lower() for s in self.sectors}:
                 return False
+        if self.sector_sources:
+            source = finding.item.sector_source if finding.item else None
+            if source is None or source.lower() not in {s.lower() for s in self.sector_sources}:
+                return False
 
         haystack = _haystack(finding)
         if self.match and not re.search(self.match, haystack, re.I | re.S):
@@ -84,6 +91,11 @@ def _haystack(finding: Finding) -> str:
 
 class RuleSet(BaseModel):
     rules: list[Rule] = Field(default_factory=list)
+    # "alert" keeps anything no rule dropped; "ignore" keeps only what a rule
+    # explicitly matched. The latter expresses "only these" directly, instead of
+    # requiring a keep-rule with `stop: true` followed by a catch-all ignore —
+    # an ordering that silently drops everything if you forget the `stop`.
+    default_action: str = "alert"
 
     def apply(
         self, findings: Sequence[Finding], target_tags: dict[str, list[str]] | None = None
@@ -92,9 +104,12 @@ class RuleSet(BaseModel):
         tags_by_target = target_tags or {}
         kept: list[Finding] = []
 
+        keep_only = self.default_action == "ignore"
+
         for finding in findings:
             tags = tags_by_target.get(finding.target, [])
             dropped = False
+            matched = False
 
             for rule in self.rules:
                 if not rule.matches(finding, tags):
@@ -102,6 +117,7 @@ class RuleSet(BaseModel):
                 if rule.action == "ignore":
                     dropped = True
                     break
+                matched = True
 
                 if rule.severity is not None and rule.severity.rank > finding.severity.rank:
                     finding.severity = rule.severity
@@ -113,8 +129,11 @@ class RuleSet(BaseModel):
                 if rule.stop:
                     break
 
-            if not dropped:
-                kept.append(finding)
+            if dropped:
+                continue
+            if keep_only and not matched:
+                continue
+            kept.append(finding)
 
         return kept
 

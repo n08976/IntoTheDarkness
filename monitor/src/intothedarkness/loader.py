@@ -62,7 +62,21 @@ def load_targets(path: Path) -> list[Target]:
 def load_rules(path: Path) -> RuleSet:
     if not path.exists():
         return RuleSet()  # rules are optional; no file means "alert on everything"
-    entries = _entries(_read_yaml(path), "rules", path)
+
+    document = _read_yaml(path)
+    entries = _entries(document, "rules", path)
+
+    # "ignore" means keep only what a rule matched — the direct way to express
+    # "only these", without a catch-all ignore rule.
+    default_action = "alert"
+    if isinstance(document, dict):
+        default_action = str(document.get("default_action") or "alert").lower()
+        if default_action not in ("alert", "ignore"):
+            raise ConfigError(
+                f"{path}: default_action must be 'alert' or 'ignore', "
+                f"got {default_action!r}"
+            )
+
     rules: list[Rule] = []
 
     for index, entry in enumerate(entries):
@@ -74,7 +88,7 @@ def load_rules(path: Path) -> RuleSet:
             name = entry.get("name", f"#{index + 1}")
             raise ConfigError(f"{path}: rule {name!r} is invalid:\n{exc}") from exc
 
-    return RuleSet(rules=rules)
+    return RuleSet(rules=rules, default_action=default_action)
 
 
 def load_sectors(path: Path) -> SectorClassifier:

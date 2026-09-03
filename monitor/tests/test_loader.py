@@ -83,3 +83,29 @@ rules:
 """)
     rules = load_rules(path).rules
     assert rules[0].severity is Severity.CRITICAL and rules[0].stop
+
+
+def test_default_action_is_read_from_the_rules_file(tmp_path):
+    """Regression: the loader built the RuleSet but ignored default_action, so
+    a `default_action: ignore` file silently behaved as alert-on-everything."""
+    path = write(tmp_path / "r.yaml", """
+default_action: ignore
+rules:
+  - name: healthcare-only
+    sectors: [healthcare]
+    channels: [email]
+""")
+    ruleset = load_rules(path)
+    assert ruleset.default_action == "ignore"
+    assert len(ruleset.rules) == 1
+
+
+def test_default_action_defaults_to_alert(tmp_path):
+    path = write(tmp_path / "r.yaml", "rules:\n  - name: a\n    channels: [email]\n")
+    assert load_rules(path).default_action == "alert"
+
+
+def test_invalid_default_action_is_rejected(tmp_path):
+    path = write(tmp_path / "r.yaml", "default_action: maybe\nrules: []\n")
+    with pytest.raises(ConfigError, match="default_action"):
+        load_rules(path)

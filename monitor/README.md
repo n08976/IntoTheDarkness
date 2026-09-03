@@ -474,7 +474,74 @@ other `.onion` links — are attached to the item automatically.
 
 ### Sector filtering
 
-Every victim is labelled with an industry sector from `config/sectors.yaml`
+Every victim carries a sector **and where that label came from**, because
+routing on a label is only safe if you can tell a stated fact from a guess:
+
+| `sector_source` | meaning |
+| --- | --- |
+| `target` | stated in the target config |
+| `upstream` | the source published its own industry label |
+| `propagated` | an authoritative index classifies this same victim |
+| `name` | keyword match on the organisation name |
+| `domain` | keyword match on the victim's domain |
+| `none` | no evidence — reported as `unknown`, never guessed |
+
+Stronger evidence always wins; a guess never displaces a stated fact. **Scrapers
+do not classify** — the pipeline does, so a guess made while scraping cannot be
+laundered into something that looks like the source's own claim.
+
+#### The authoritative index
+
+Keyword-matching a company name leaves most victims unlabelled — measured at
+**61% unknown** across one leak site's 263 entries. "Easterseals", "Community
+Care Alliance" and "Florida Lung" are plainly healthcare to a human and
+invisible to a keyword list.
+
+```bash
+itd sector index --refresh                    # healthcare by default
+itd sector index --refresh -s healthcare -s finance
+itd sector index                              # what is cached
+```
+
+This downloads victims already classified by sector from ransomware.live. On
+that same leak site it took healthcare from **22 to 44** — double the recall,
+every addition backed by a stated classification rather than a better guess.
+
+The API allows about one request a minute, so the index is cached on disk and
+refreshed deliberately; a monitoring run never refetches it. Only distinctive
+names are matched — "Summit", "ACME" and "N/A" are refused, because a wrong
+sector silently misroutes an alert.
+
+#### Routing one sector
+
+```yaml
+default_action: ignore      # keep only what a rule matches
+
+rules:
+  - name: healthcare-confirmed
+    sectors: [healthcare]
+    sector_sources: [target, upstream, propagated]
+    severity: critical
+    channels: [email]
+
+  - name: healthcare-inferred
+    sectors: [healthcare]
+    sector_sources: [name, domain]
+    severity: high
+    channels: [email]
+```
+
+`default_action: ignore` is the direct way to say "only these" — no catch-all
+ignore rule and no `stop: true`. Splitting confirmed from inferred means a
+keyword guess arrives at a different severity than a stated fact, rather than
+both looking equally certain.
+
+Measured across all five sources: 529 victims scraped, **68 healthcare**
+(57 propagated, 7 upstream, 4 name).
+
+#### The keyword vocabulary
+
+Names are matched against `config/sectors.yaml`
 (keyword matching; unmatched names are `unknown`, never guessed).
 
 ```bash
