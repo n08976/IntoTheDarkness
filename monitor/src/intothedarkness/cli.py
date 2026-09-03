@@ -161,6 +161,10 @@ def run(
     force: bool = typer.Option(False, "--force", "-f", help="Ignore interval_minutes."),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Print, don't send or persist."),
     no_notify: bool = typer.Option(False, "--no-notify", help="Detect but send nothing."),
+    preview: bool = typer.Option(
+        False, "--preview",
+        help="Write the report as HTML instead of sending it, and print the path.",
+    ),
     targets_file: Path = typer.Option(None, "--targets", help="Path to targets YAML."),
     rules_file: Path = typer.Option(None, "--rules", help="Path to rules YAML."),
 ) -> None:
@@ -175,7 +179,15 @@ def run(
         repo=_repo(),
         classifier=load_sectors(get_settings().sectors_file),
     )
-    report = pipeline.run(targets, force=force, dry_run=dry_run, notify=not no_notify)
+    report = pipeline.run(
+        targets, force=force, dry_run=dry_run, notify=not no_notify, preview=preview
+    )
+
+    if preview:
+        previews = sorted((get_settings().data_dir / "previews").glob("report-*.html"))
+        if previews:
+            console.print(f"\n[green]✓[/green] report written to {previews[-1]}")
+            console.print(f"  [dim]open it in a browser: file://{previews[-1]}[/dim]")
 
     console.print(f"\n[bold]{report.summary()}[/bold]")
     for name, message in report.errors.items():

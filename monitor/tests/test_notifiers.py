@@ -153,3 +153,35 @@ def test_webhook_raises_on_http_error(settings):
 def test_webhook_reports_missing_configuration(settings):
     ok, why = get_notifier("webhook", settings).available()
     assert not ok and "WEBHOOK_URL" in why
+
+
+# -------------------------------------------------------------------- preview
+
+
+def test_preview_writes_html_and_text_without_sending(settings):
+    settings.ensure_dirs()
+    notifier = get_notifier("preview", settings)
+    notifier.send(sample_message())
+
+    assert notifier.last_path is not None and notifier.last_path.exists()
+    html = notifier.last_path.read_text(encoding="utf-8")
+    assert "Alpha" in html
+    assert "<!doctype html>" in html.lower()
+    # The subject is not part of the email body, so the preview must add it or
+    # it shows only half of what would be sent.
+    assert "HIGH" in html
+
+    text = notifier.last_path.with_suffix(".txt").read_text(encoding="utf-8")
+    assert text.startswith("Subject:")
+    assert "Alpha" in text
+
+
+def test_preview_escapes_scraped_content_in_the_subject(settings):
+    from intothedarkness.notify import Message
+
+    settings.ensure_dirs()
+    notifier = get_notifier("preview", settings)
+    notifier.send(Message(subject="<script>alert(1)</script>", text="body", findings=[]))
+    html = notifier.last_path.read_text(encoding="utf-8")
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html

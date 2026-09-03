@@ -71,6 +71,20 @@ Four scrapers ship in the box:
 - **`embedded`** — records from JSON a JavaScript app left in its own HTML
   (Inertia `data-page`, Next.js `__NEXT_DATA__`, Nuxt `window.__NUXT__`).
 
+### A splash page is not necessarily the whole site
+
+One live leak site served a landing page advertising "263 Companies" that
+contained none of them, and no embedded JSON either. Its own inline JavaScript
+gave the answer:
+
+```js
+fetch("/archive.php?last")
+```
+
+`/archive.php` returns all 263 as plain HTML. Reading the page's scripts for the
+endpoints they call is worth doing before concluding a site needs a browser —
+`grep` for `fetch(`, `.php`, `/api/` in the served HTML.
+
 ### An empty page is not necessarily a browser problem
 
 A single-page app serves an empty `<body>` and builds the page with JavaScript,
@@ -505,6 +519,23 @@ rules:
 
 Conditions: `targets` (glob), `kinds`, `tags`, `sectors`, `match`, `not_match`.
 Effects: `action` (`alert`/`ignore`), `severity`, `channels`, `stop`.
+
+## Seeing a report before wiring up email
+
+```bash
+itd run --dry-run       # print it, persist nothing, send nothing
+itd run --no-notify     # detect and record, send nothing
+itd run --preview       # write the real HTML report to data/previews/
+itd findings            # query what was recorded
+```
+
+`--dry-run` already *is* the plain-text email — the console channel and the
+email body use the same renderer. What it cannot show you is the HTML part,
+which is what actually renders in an inbox. `--preview` writes that to a file,
+subject line included, and prints the path.
+
+`--preview` overrides channels at dispatch, after rules have run, so a rule that
+adds `email` cannot quietly send something you asked only to preview.
 
 ## Alerting
 

@@ -160,6 +160,7 @@ class Pipeline:
         force: bool = False,
         dry_run: bool = False,
         notify: bool = True,
+        preview: bool = False,
     ) -> RunReport:
         report = RunReport()
         tags_by_target = {t.name: t.tags for t in targets}
@@ -197,7 +198,7 @@ class Pipeline:
                 report.findings if dry_run else self._drop_recently_alerted(report)
             )
             if deliverable:
-                self._dispatch(deliverable, report, dry_run=dry_run)
+                self._dispatch(deliverable, report, dry_run=dry_run, preview=preview)
 
         return report
 
@@ -224,10 +225,21 @@ class Pipeline:
         return dict(routes)
 
     def _dispatch(
-        self, findings: Sequence[Finding], report: RunReport, dry_run: bool = False
+        self,
+        findings: Sequence[Finding],
+        report: RunReport,
+        dry_run: bool = False,
+        preview: bool = False,
     ) -> None:
-        for channel, group in self._routes(findings).items():
-            if dry_run and channel != "console":
+        routes = self._routes(findings)
+        if preview:
+            # Rules can add channels after a target's own list, so the override
+            # has to happen here — at dispatch — or a rule silently re-adds
+            # email to something the user asked only to preview.
+            routes = {"preview": list(findings)}
+
+        for channel, group in routes.items():
+            if dry_run and channel not in ("console", "preview"):
                 channel = "console"
 
             message = Message(

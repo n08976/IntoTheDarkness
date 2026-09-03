@@ -286,3 +286,24 @@ def test_target_sector_still_overrides_everything(settings, repo):
     finally:
         SCRAPERS.pop("supplied2", None)
     assert items[0].sector == "defence"
+
+
+def test_preview_overrides_channels_that_rules_added(settings, repo):
+    """Regression: --preview set the targets' channels, but a rule re-added
+    email afterwards, so a preview-only run still tried to send mail."""
+    from intothedarkness.alerting import Rule, RuleSet
+
+    rules = RuleSet(rules=[Rule(name="escalate", channels=["capture"])])
+    p = pipeline(settings, repo, rules)
+
+    FEED[:] = [("a", "Alpha")]
+    p.run([target(channels=[])])
+    FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+    report = p.run([target(channels=[])], preview=True)
+
+    assert Capture_sent_count() == 0, "rule-added channel was used despite --preview"
+    assert report.notified.get("preview") == 1
+
+
+def Capture_sent_count() -> int:
+    return len(CapturingNotifier.sent)
