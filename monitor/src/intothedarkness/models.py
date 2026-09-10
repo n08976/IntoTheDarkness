@@ -92,6 +92,9 @@ class Target(BaseModel):
     include: str | None = None  # regex an item must match to be kept
     exclude: str | None = None  # regex that drops an item
 
+    # Resolves relative links a source returns. An API that reports
+    # "Companies/acme" is useless in an email without its site prefix.
+    base_url: str | None = None
     # Which network to fetch over: auto (.onion implies Tor), direct, or tor.
     # An explicit value makes a misrouted target fail loudly instead of leaking
     # a hidden-service lookup onto clearnet DNS.

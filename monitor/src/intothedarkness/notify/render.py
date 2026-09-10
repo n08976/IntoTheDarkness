@@ -72,7 +72,15 @@ def is_baseline(findings: Sequence[Finding]) -> bool:
     return bool(findings) and all(f.kind is FindingKind.BASELINE for f in findings)
 
 
-def render_subject(findings: Sequence[Finding]) -> str:
+def render_subject(findings: Sequence[Finding], new_count: int | None = None) -> str:
+    """Subject line. In digest mode ``new_count`` reports how many are new."""
+    if new_count is not None:
+        noun = "entry" if len(findings) == 1 else "entries"
+        return f"IntoTheDarkness: {len(findings)} {noun} - {new_count} new"
+    return _render_subject(findings)
+
+
+def _render_subject(findings: Sequence[Finding]) -> str:
     if not findings:
         return "IntoTheDarkness: no findings"
     top = max(findings, key=lambda f: f.severity.rank)
@@ -101,6 +109,56 @@ def group_by_sector(findings: Sequence[Finding]) -> dict[str, list[Finding]]:
     )
 
 
+def _links(finding: Finding) -> list[str]:
+    """The two links a reader actually wants: the leak entry and the victim."""
+    lines: list[str] = []
+    item = finding.item
+    if item is None:
+        return lines
+    if item.url:
+        lines.append(f"      leak:    {item.url}")
+    website = item.fields.get("website")
+    if website:
+        lines.append(f"      website: {website}")
+    return lines
+
+
+def render_digest_text(
+    entries: Sequence[Finding], new_keys: set[str], target_label: str = ""
+) -> str:
+    """The full running list, with anything new since the last report first."""
+    new = [f for f in entries if f.item and f.item.key in new_keys]
+    running = [f for f in entries if not (f.item and f.item.key in new_keys)]
+
+    lines = [
+        f"{len(entries)} entries currently listed"
+        + (f" across {target_label}" if target_label else "")
+        + f" — {len(new)} new since the last report.",
+        "",
+    ]
+
+    if new:
+        lines += [f"NEW SINCE LAST REPORT ({len(new)})", "=" * 46, ""]
+        for sector, group in group_by_sector(new).items():
+            lines.append(f"-- {sector} ({len(group)})")
+            for f in sorted(group, key=lambda f: (f.item.title if f.item else "").lower()):
+                lines.append(f"  * {f.item.summary() if f.item else f.message}")
+                lines += _links(f)
+            lines.append("")
+    else:
+        lines += ["No new entries since the last report.", ""]
+
+    lines += [f"RUNNING LIST ({len(running)})", "=" * 46, ""]
+    for sector, group in group_by_sector(running).items():
+        lines.append(f"-- {sector} ({len(group)})")
+        for f in sorted(group, key=lambda f: (f.item.title if f.item else "").lower()):
+            lines.append(f"  - {f.item.summary() if f.item else f.message}")
+            lines += _links(f)
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
 def render_text(findings: Sequence[Finding]) -> str:
     if not findings:
         return "no findings"
@@ -116,8 +174,7 @@ def render_text(findings: Sequence[Finding]) -> str:
             sector = f.item.sector if f.item else None
             label = f" [{sector}]" if sector and sector != "unknown" else ""
             lines.append(f"  [{f.severity.value}] {f.kind.value}:{label} {subject}")
-            if f.item and f.item.url:
-                lines.append(f"      {f.item.url}")
+            lines += _links(f)
             if f.rule:
                 lines.append(f"      rule: {f.rule}")
         lines.append("")
@@ -188,6 +245,88 @@ _BASELINE_HTML = _env.from_string(
 </div>
 """
 )
+
+
+_DIGEST_HTML = _env.from_string(
+    """
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            font-size:14px;color:#111827;max-width:720px">
+  <p style="margin:0 0 16px;color:#4b5563">
+    <strong>{{ total }}</strong> entries currently listed —
+    <strong style="color:{{ '#dc2626' if new|length else '#6b7280' }}">
+      {{ new|length }} new</strong> since the last report.
+  </p>
+
+  {% if new %}
+  <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
+              margin-bottom:24px;background:#fef2f2">
+    <h2 style="font-size:15px;margin:12px 0 8px;color:#991b1b">
+      New since last report ({{ new|length }})</h2>
+    {% for sector, items in new_by_sector.items() %}
+    <h3 style="margin:12px 0 4px;font-size:13px;color:#374151;
+               text-transform:uppercase;letter-spacing:.04em">
+      {{ sector }} ({{ items|length }})</h3>
+    <ul style="margin:0;padding-left:18px">
+      {% for f in items %}{{ entry(f) }}{% endfor %}
+    </ul>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="margin:0 0 20px;color:#6b7280">No new entries since the last report.</p>
+  {% endif %}
+
+  <h2 style="font-size:15px;margin:0 0 8px;padding-bottom:4px;
+             border-bottom:1px solid #e5e7eb">Running list ({{ running|length }})</h2>
+  {% for sector, items in running_by_sector.items() %}
+  <h3 style="margin:14px 0 4px;font-size:13px;color:#374151;
+             text-transform:uppercase;letter-spacing:.04em">
+    {{ sector }} ({{ items|length }})</h3>
+  <ul style="margin:0;padding-left:18px">
+    {% for f in items %}{{ entry(f) }}{% endfor %}
+  </ul>
+  {% endfor %}
+
+  <p style="margin-top:24px;color:#9ca3af;font-size:12px">
+    IntoTheDarkness · {{ now }}</p>
+</div>
+"""
+)
+
+_ENTRY = _env.from_string(
+    """<li style="margin-bottom:6px">
+  <strong>{{ f.item.summary() if f.item else f.message }}</strong>
+  {%- if f.item and (f.item.url or f.item.fields.get('website')) %}
+  <div style="font-size:12px;margin-top:1px">
+    {%- if f.item.url %}
+    <a href="{{ f.item.url }}" style="color:#b91c1c;text-decoration:none">leak</a>
+    {%- endif %}
+    {%- if f.item.url and f.item.fields.get('website') %}
+    <span style="color:#d1d5db"> · </span>
+    {%- endif %}
+    {%- if f.item.fields.get('website') %}
+    <a href="{{ f.item.fields['website'] }}"
+       style="color:#1d4ed8;text-decoration:none">{{ f.item.fields['website'] }}</a>
+    {%- endif %}
+  </div>
+  {%- endif %}
+</li>"""
+)
+
+
+def render_digest_html(entries: Sequence[Finding], new_keys: set[str]) -> str:
+    from ..models import utcnow
+
+    new = [f for f in entries if f.item and f.item.key in new_keys]
+    running = [f for f in entries if not (f.item and f.item.key in new_keys)]
+    return _DIGEST_HTML.render(
+        total=len(entries),
+        new=new,
+        running=running,
+        new_by_sector=group_by_sector(new),
+        running_by_sector=group_by_sector(running),
+        entry=lambda f: _ENTRY.render(f=f),
+        now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    )
 
 
 def render_html(findings: Sequence[Finding]) -> str:

@@ -621,7 +621,7 @@ ITD_EMAIL_TO='["you@example.com"]'    # JSON list
 SMTP works too:
 
 ```bash
-ITD_SMTP_HOST=premium215.web-hosting.com   # the SERVER's hostname
+ITD_SMTP_HOST=<server>.web-hosting.com   # the SERVER's hostname
 ITD_SMTP_PORT=587
 ITD_SMTP_USER=noreply@yourdomain.com
 ITD_SMTP_PASSWORD=...

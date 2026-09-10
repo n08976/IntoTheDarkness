@@ -93,6 +93,25 @@ class RunRow(Base):
     error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
+class ReportedRow(Base):
+    """An item already included in a sent report.
+
+    A digest shows the whole roster every time, so "new" cannot mean "a finding
+    from this run" — several runs may happen between emails. It means "not in
+    the last report", which is what this records.
+    """
+
+    __tablename__ = "reported"
+    __table_args__ = (UniqueConstraint("target", "item_key", name="uq_reported"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target: Mapped[str] = mapped_column(String(200), index=True)
+    item_key: Mapped[str] = mapped_column(String(64), index=True)
+    reported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+
 class CaseRow(Base):
     """An investigation: a named folder for findings, notes and evidence."""
 

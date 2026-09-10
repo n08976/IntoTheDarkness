@@ -181,7 +181,7 @@ ITD_RESPECT_ROBOTS=true
 # --- email: SMTP (alternative) -----------------------------------------------
 # On shared cPanel hosting, connect to the SERVER's hostname, not your domain —
 # the domain's certificate does not cover the mail host and verification fails.
-#   host premium215.web-hosting.com, port 587, STARTTLS, auth on
+#   host <server>.web-hosting.com, port 587, STARTTLS, auth on
 # Sending is refused outright if the server does not offer STARTTLS.
 ITD_SMTP_HOST=smtp.example.com
 ITD_SMTP_PORT=587

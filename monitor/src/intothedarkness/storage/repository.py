@@ -8,7 +8,16 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from ..models import Finding, FindingKind, Item, Severity, utcnow
-from .db import AlertRow, CaseRow, Database, EvidenceRow, FindingRow, ObservationRow, RunRow
+from .db import (
+    AlertRow,
+    CaseRow,
+    Database,
+    EvidenceRow,
+    FindingRow,
+    ObservationRow,
+    ReportedRow,
+    RunRow,
+)
 
 
 class Repository:
@@ -127,6 +136,64 @@ class Repository:
 
         return findings
 
+    def roster(self, target: str, include_missing: bool = False) -> list[Item]:
+        """Every item currently listed for a target, as Items.
+
+        This is the running list a digest reports. Items that have gone from the
+        source are excluded unless asked for.
+        """
+        with self.db.session() as s:
+            rows = s.scalars(
+                select(ObservationRow).where(ObservationRow.target == target)
+            ).all()
+        items: list[Item] = []
+        for row in rows:
+            if row.missing_since is not None and not include_missing:
+                continue
+            if not row.payload:
+                continue
+            try:
+                items.append(Item.model_validate(row.payload))
+            except Exception:  # a payload written by an older schema
+                continue
+        return items
+
+    def reported_keys(self, target: str) -> set[str]:
+        """Item keys already covered by a sent report."""
+        with self.db.session() as s:
+            rows = s.scalars(
+                select(ReportedRow.item_key).where(ReportedRow.target == target)
+            ).all()
+        return set(rows)
+
+    def mark_reported(self, target: str, keys: Sequence[str]) -> int:
+        """Record that a report covered these items. Called only after a send."""
+        if not keys:
+            return 0
+        with self.db.session() as s:
+            existing = set(
+                s.scalars(
+                    select(ReportedRow.item_key).where(ReportedRow.target == target)
+                ).all()
+            )
+            added = 0
+            for key in keys:
+                if key in existing:
+                    continue
+                s.add(ReportedRow(target=target, item_key=key))
+                existing.add(key)
+                added += 1
+        return added
+
+    def forget_reported(self, target: str) -> int:
+        with self.db.session() as s:
+            rows = s.scalars(
+                select(ReportedRow).where(ReportedRow.target == target)
+            ).all()
+            for row in rows:
+                s.delete(row)
+            return len(rows)
+
     def forget_target(self, target: str) -> int:
         """Drop stored state so the next run re-seeds from scratch."""
         with self.db.session() as s:
@@ -135,7 +202,9 @@ class Repository:
             ).all()
             for row in rows:
                 s.delete(row)
-            return len(rows)
+            count = len(rows)
+        self.forget_reported(target)
+        return count
 
     # -------------------------------------------------------------------- findings
 

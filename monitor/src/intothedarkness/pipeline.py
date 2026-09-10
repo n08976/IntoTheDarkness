@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urljoin, urlparse
 
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
@@ -101,6 +102,7 @@ class Pipeline:
     def _enrich(self, target: Target, item: Item) -> Item:
         """Bound the stored body and make sure every item carries a sector."""
         item = item.truncated(self.settings.max_item_text)
+        self._normalise_links(target, item)
 
         # Precedence runs by strength of evidence, and the provenance is kept
         # alongside the label so a routing rule can require a stated fact rather
@@ -117,6 +119,27 @@ class Pipeline:
         item.fields["sector"] = result.sector
         item.fields["sector_source"] = result.source
         return item
+
+    def _normalise_links(self, target: Target, item: Item) -> None:
+        """Make both links usable in a report.
+
+        ``item.url`` becomes the leak-site link for this victim, and
+        ``fields["website"]`` the victim's own site, each absolute. Sources
+        return these in several shapes: a bare domain, a relative path, or a
+        full URL.
+        """
+        if item.url and target.base_url and not urlparse(item.url).scheme:
+            item.url = urljoin(target.base_url, item.url)
+        if not item.url and target.base_url:
+            item.url = target.base_url
+
+        website = str(item.fields.get("website") or "").strip()
+        if website:
+            if not urlparse(website).scheme:
+                website = f"https://{website.lstrip('/')}"
+            item.fields["website"] = website
+        else:
+            item.fields.pop("website", None)
 
     def content_mode(self, target: Target) -> str:
         return target.content_mode or self.settings.content_mode
