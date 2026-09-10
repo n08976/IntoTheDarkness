@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "intothedarkness"
+version = "0.1.0"
+description = "Scrape, watch, alert, investigate."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "httpx[socks]>=0.27",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "PyYAML>=6.0",
+    "SQLAlchemy>=2.0",
+    "typer>=0.12",
+    "rich>=13.7",
+    "Jinja2>=3.1",
+    "tenacity>=8.3",
+]
+
+[project.optional-dependencies]
+# Circuit rotation via Tor's ControlPort. Everything else works without it.
+tor = ["stem>=1.8"]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "respx>=0.21",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+itd = "intothedarkness.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/intothedarkness"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/intothedarkness/py.typed" = "intothedarkness/py.typed"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["intothedarkness"]
+ignore_missing_imports = true
+
+[tool.ruff.lint.per-file-ignores]
+# Typer's whole API is `x: T = typer.Option(...)` in the signature.
+"src/intothedarkness/cli.py" = ["B008"]

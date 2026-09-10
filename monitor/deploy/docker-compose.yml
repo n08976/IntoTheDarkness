@@ -1,0 +1,26 @@
+# The tool carries its own Tor, so there is no second service to coordinate.
+#   cp ../.env.example .env && edit
+#   docker compose run --rm itd itd tor status --identity
+#   docker compose up -d
+services:
+  itd:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: intothedarkness:latest
+    container_name: itd
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Set to 0 to point at a Tor you run yourself via ITD_TOR_SOCKS_URL.
+      ITD_TOR_AUTOSTART: "1"
+    volumes:
+      # Your bookmarks.json and config/*.yaml, read-only.
+      - ../config:/config:ro
+      # Database, snapshots, cases and the downloaded Tor persist here.
+      - itd-data:/data
+    command: ["itd", "watch", "--interval", "21600"]
+
+volumes:
+  itd-data:
