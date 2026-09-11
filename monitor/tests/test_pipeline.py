@@ -119,6 +119,8 @@ def test_dry_run_persists_nothing_and_routes_to_console(settings, repo, capsys):
     FEED[:] = [("a", "Alpha")]
     p.run([target()])
 
+    before = repo.last_run(target().name).id
+
     FEED[:] = [("a", "Alpha"), ("b", "Beta")]
     report = p.run([target()], dry_run=True)
 
@@ -126,6 +128,15 @@ def test_dry_run_persists_nothing_and_routes_to_console(settings, repo, capsys):
     assert CapturingNotifier.sent == []            # rerouted to console
     assert repo.recent_findings() == []            # nothing written
     assert "Beta" in capsys.readouterr().out
+
+    # The observations must not have been recorded either. Checking only that
+    # no findings were written misses the damage that matters: a dry run that
+    # quietly seeds today's items makes them "already seen", so the next real
+    # run reports nothing and the new victims are lost for good.
+    assert repo.last_run(target().name).id == before   # no run row, interval intact
+    report = p.run([target()])
+    assert [f.item.key for f in report.findings] == ["b"]
+    assert len(CapturingNotifier.sent) == 1
 
 
 def test_no_notify_detects_and_records_but_sends_nothing(settings, repo):

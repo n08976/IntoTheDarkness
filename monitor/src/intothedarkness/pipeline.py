@@ -145,19 +145,23 @@ class Pipeline:
         return target.content_mode or self.settings.content_mode
 
     def run_target(
-        self, target: Target, fetcher: Fetcher, force: bool = False
+        self, target: Target, fetcher: Fetcher, force: bool = False, dry_run: bool = False
     ) -> tuple[list[Finding], int]:
         """Scrape one target; return its findings and how many items it saw.
 
         Findings come back already stamped with the target's severity and
         channels, which rules may then raise or extend.
         """
-        run_id = self.repo.start_run(target.name)
+        # A dry run records nothing at all: no run row, so it does not consume
+        # the target's interval, and no observations, so it cannot quietly fold
+        # today's new victims into the baseline.
+        run_id = None if dry_run else self.repo.start_run(target.name)
         try:
             items = self.scrape_target(target, fetcher)
         except Exception as exc:
             log.warning("target %s failed: %s", target.name, exc)
-            self.repo.finish_run(run_id, ok=False, error=str(exc))
+            if run_id is not None:
+                self.repo.finish_run(run_id, ok=False, error=str(exc))
             if FindingKind.ERROR in target.watch:
                 return (
                     [
@@ -174,13 +178,18 @@ class Pipeline:
             raise
 
         findings = self.repo.diff_and_record(
-            target.name, items, target.watch, report_baseline=target.report_baseline
+            target.name,
+            items,
+            target.watch,
+            report_baseline=target.report_baseline,
+            persist=not dry_run,
         )
         for finding in findings:
             finding.severity = target.severity
             finding.channels = list(target.channels)
 
-        self.repo.finish_run(run_id, items=len(items), findings=len(findings))
+        if run_id is not None:
+            self.repo.finish_run(run_id, items=len(items), findings=len(findings))
         return findings, len(items)
 
     # --------------------------------------------------------------------- full run
@@ -208,7 +217,7 @@ class Pipeline:
 
                 report.targets_run += 1
                 try:
-                    findings, item_count = self.run_target(target, fetcher, force)
+                    findings, item_count = self.run_target(target, fetcher, force, dry_run)
                 except Exception as exc:
                     report.errors[target.name] = str(exc)
                     continue

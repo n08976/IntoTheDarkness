@@ -1,0 +1,19 @@
+# ===========================================================================
+# IntoTheDarkness — leak-site monitoring. SOURCE OF TRUTH for this schedule.
+# Append to the user crontab (do NOT replace it; other projects live there):
+#     (crontab -l; cat deploy/crontab) | crontab -
+# Then verify:  crontab -l
+#
+# Sweeps run at 06:00, 10:00 and 14:00 US Eastern.
+#
+# The hour is decided inside monitor-run.sh, not here, so cron fires hourly
+# and --scheduled returns immediately on the other 21 hours. Ubuntu's cron
+# (3.0pl1) has no CRON_TZ, and `Linger=no` on this box rules out a systemd
+# timer with its own timezone, so this is the one arrangement that follows
+# EDT/EST on its own and keeps 6am at 6am all year. Change the hours with
+# ITD_RUN_HOURS in the script, not by editing this line.
+#
+# Silence means it ran and found nothing. Tor trouble, a failed sweep or a
+# self-healed Tor all send mail — see deploy/ops_notify.py.
+# ===========================================================================
+0 * * * * /home/user/.claude/projects/ai-intothedarkness/deploy/monitor-run.sh --scheduled

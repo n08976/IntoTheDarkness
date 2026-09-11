@@ -39,10 +39,16 @@ class Repository:
         items: Sequence[Item],
         watch: Sequence[FindingKind],
         report_baseline: bool = False,
+        persist: bool = True,
     ) -> list[Finding]:
         """Compare a fresh scrape against stored state and persist the new state.
 
         Returns findings for whichever kinds the target asked to watch.
+
+        With ``persist`` false the comparison is made and findings are returned,
+        but the new state is rolled back rather than written. A dry run has to
+        leave no trace: recording the observations would fold today's new
+        victims into the baseline, and they would never be reported as new.
 
         A target with no prior observations is normally *seeded* silently: the
         first run should not page you with an entire back catalogue. When
@@ -133,6 +139,11 @@ class Repository:
                             message=f"item {key} no longer present",
                         )
                     )
+
+            if not persist:
+                # Discard every row added or touched above. The findings
+                # themselves are plain objects and survive the rollback.
+                s.rollback()
 
         return findings
 
