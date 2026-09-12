@@ -188,3 +188,24 @@ def test_css_missing_attribute_yields_empty_string():
     )
     items = get_scraper("css", FakeFetcher(html)).scrape(target)
     assert items[0].fields["nope"] == ""
+
+
+def test_json_scraper_rejects_a_rate_limit_envelope():
+    # ransomware.live answers a throttled request with {"message": "1 per 1
+    # minute"}. Wrapped as a single item it would look like a feed that went
+    # quiet, and a quiet feed is exactly what "no new victims" looks like.
+    target = Target(name="feed", url="https://api.example.com/x", scraper="json")
+    with pytest.raises(ValueError, match="error envelope"):
+        get_scraper("json", FakeFetcher(json.dumps({"message": "1 per 1 minute"}))).scrape(target)
+
+
+def test_json_scraper_still_accepts_a_single_record_object():
+    # Narrow sentinel: a dict carrying real fields is a one-record feed, not a
+    # complaint, and must keep working.
+    payload = json.dumps({"id": 1, "name": "Only"})
+    target = Target(
+        name="feed", url="https://api.example.com/x", scraper="json",
+        json_fields={"key": "id", "title": "name"},
+    )
+    items = get_scraper("json", FakeFetcher(payload)).scrape(target)
+    assert [i.title for i in items] == ["Only"]

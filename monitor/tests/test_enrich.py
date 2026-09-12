@@ -78,6 +78,41 @@ def test_classifies_common_names(name, sector):
     assert SectorClassifier().classify(name) == sector
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Acadian Ambulance",           # an EMS provider, missed before
+        "Liga Contra el Cancer",
+        "Riverside Physician Group",
+        "Lakeside Rehabilitation",
+        "Harbour Chiropractic",
+        "Summit Urgent Care",
+        "Evergreen Assisted Living",
+    ],
+)
+def test_healthcare_recall_on_names_that_carry_no_obvious_keyword(name):
+    # Measured against a live leak-site listing: these shapes were landing in
+    # "unknown" and so never reached the healthcare-only alert rules.
+    assert SectorClassifier().classify(name) == "healthcare"
+
+
+@pytest.mark.parametrize(
+    "name,sector",
+    [
+        ("Precision Plasma Cutting", "unknown"),
+        ("Anytime Fitness Wellness", "unknown"),
+        ("Riverside Imaging Solutions", "unknown"),
+        ("Northern Labs Industrial", "manufacturing"),
+    ],
+)
+def test_healthcare_keywords_do_not_swallow_other_industries(name, sector):
+    # The terms these names contain -- plasma, wellness, imaging, lab -- read as
+    # healthcare but belong to other industries at least as often, so they are
+    # deliberately kept out of the keyword list. A wrong sector routes an alert
+    # away silently, which is worse than no label at all.
+    assert SectorClassifier().classify(name) == sector
+
+
 def test_unmatched_names_are_unknown_not_guessed():
     assert SectorClassifier().classify("Zzyzx Holdings") == UNKNOWN
 
@@ -192,3 +227,19 @@ def test_meaningless_upstream_labels_fall_through(label):
     from intothedarkness.enrich import normalize_sector
 
     assert normalize_sector(label) is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "nutexhealth.com",
+        "https://nutexhealth.com",
+        "https://www.nutexhealth.com/",
+        "http://nutexhealth.com/patients?ref=1",
+    ],
+)
+def test_classify_domain_accepts_a_url_as_well_as_a_hostname(value):
+    # The pipeline normalises a victim's website to "https://..." before
+    # classifying. Splitting that on "/" without stripping the scheme yields
+    # "https:", which silently classifies as unknown.
+    assert SectorClassifier().classify_domain(value) == "healthcare"

@@ -45,6 +45,17 @@ DEFAULT_SECTORS: dict[str, list[str]] = {
         "care center", "care centre", "surgery", "orthope", "pediatric",
         "paediatric", "diagnostic", "radiolog", "oncolog", "nursing", "hospice",
         "eye care", "optical", "optometr", "bioresearch", "biotech",
+        # Added after measuring recall against live leak-site listings: an
+        # ambulance service and a cancer centre were both being missed. Terms
+        # that double as other industries are deliberately absent -- "lab",
+        # "imaging", "plasma" and "wellness" all collide with manufacturing,
+        # printing or fitness, and a wrong sector routes an alert away silently.
+        "ambulance", "cancer", "physician", "psychiatr", "psycholog",
+        "rehabilitation", "therapy", "therapeutic", "cardiol", "neurolog",
+        "dermatol", "urolog", "gastroenterol", "anesthes", "obstetr",
+        "gynecol", "podiatr", "chiropract", "prosthet", "orthodont",
+        "urgent care", "primary care", "home care", "assisted living",
+        "senior living", "medicaid", "medicare",
     ],
     "education": [
         "school", "university", "college", "academy", "institute", "campus",
@@ -240,7 +251,13 @@ class SectorClassifier:
         """
         if not domain:
             return UNKNOWN
-        host = domain.strip().lower().split("/")[0]
+        host = domain.strip().lower()
+        # Callers hand this either a bare hostname or a full URL -- the pipeline
+        # normalises a victim's website to "https://..." before classifying, and
+        # splitting a URL on "/" without stripping the scheme yields "https:".
+        if "//" in host:
+            host = host.split("//", 1)[1]
+        host = host.split("/")[0].split("?")[0].split("@")[-1]
         host = host.removeprefix("www.")
         if not host or "." not in host:
             return UNKNOWN

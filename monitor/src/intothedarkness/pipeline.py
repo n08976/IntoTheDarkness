@@ -110,7 +110,10 @@ class Pipeline:
         result = self.classifier.resolve(
             name=item.title,
             upstream=item.fields.get("sector"),
-            domain=str(item.fields.get("domain") or ""),
+            # "website" is what most feeds and leak sites call this; falling
+            # back to it means a target that maps only that field still gets
+            # domain-based classification instead of silently getting none.
+            domain=str(item.fields.get("domain") or item.fields.get("website") or ""),
             target_sector=target.sector,
             context=item.text,
             use_context=self.settings.sector_use_context,

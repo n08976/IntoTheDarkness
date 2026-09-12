@@ -7,6 +7,14 @@ from typing import Any
 from ..models import Item, Target, stable_hash
 from .base import Scraper, register
 
+# Bodies that are an API complaint rather than data. A throttled or errored
+# endpoint must fail loudly: the dict would otherwise be wrapped into a single
+# contentless item below, which reads downstream as "the feed went quiet"
+# rather than "the fetch did not happen". ransomware.live answers 429 with
+# {"message": "1 per 1 minute"}, but the status code is not guaranteed -- the
+# shape of the body is the reliable signal.
+ERROR_ENVELOPE_KEYS = frozenset({"message", "error", "detail", "errors", "status"})
+
 
 def dig(data: Any, path: str | None) -> Any:
     """Walk a dotted path, where a numeric segment indexes into a list."""
@@ -49,6 +57,13 @@ class JsonScraper(Scraper):
             network=target.network,
         )
         payload = resp.json()
+
+        if isinstance(payload, dict) and payload and set(payload) <= ERROR_ENVELOPE_KEYS:
+            raise ValueError(
+                f"target {target.name!r}: {target.url} returned an error envelope "
+                f"(HTTP {resp.status}), not data: {payload}"
+            )
+
         records = dig(payload, target.json_path)
 
         if records is None:
