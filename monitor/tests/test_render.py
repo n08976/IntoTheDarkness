@@ -42,3 +42,17 @@ def test_html_links_items_and_shows_severity_colour():
 def test_empty_findings_render_safely():
     assert render_subject([]) == "IntoTheDarkness: no findings"
     assert render_text([]) == "no findings"
+
+
+def test_digest_html_entries_are_real_markup_not_escaped_text():
+    # The entry sub-template is rendered to a string and inserted into an
+    # autoescaping outer template. Without marking it safe, every <li> arrived
+    # in the inbox as literal "&lt;li ...&gt;" text -- which is what happened.
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html
+
+    f = Finding(kind=FindingKind.NEW, target="t",
+                item=Item(key="k", target="t", title="Acme Hospital", url="https://e.com/1"))
+    html = render_digest_html([f], {"k"})
+    assert "<li " in html and "&lt;li" not in html
+    assert "<strong>Acme Hospital</strong>" in html

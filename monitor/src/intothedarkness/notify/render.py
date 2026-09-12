@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 
 from jinja2 import Environment, select_autoescape
+from markupsafe import Markup
 
 from ..models import Finding, FindingKind, Severity
 from .dates import stamp_for
@@ -359,7 +360,9 @@ def render_digest_html(
         running_by_sector={
             k: _newest_first(v) for k, v in group_by_sector(running).items()
         },
-        entry=lambda f: _ENTRY.render(f=f, stamp=stamp_for),
+        # The entry is already-rendered HTML. Without Markup, autoescape on
+        # the outer template turns every <li> into literal text in the mail.
+        entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for)),
         status=status,
         window_days=window_days,
         now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),
