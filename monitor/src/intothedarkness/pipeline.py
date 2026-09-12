@@ -13,7 +13,16 @@ from .alerting.rules import RuleSet
 from .config import Settings, get_settings
 from .enrich import SectorClassifier, SectorIndex
 from .models import Finding, FindingKind, Item, Severity, Target
-from .notify import Message, get_notifier, render_html, render_subject, render_text
+from .notify import (
+    Message,
+    Notifier,
+    get_notifier,
+    render_digest_html,
+    render_digest_text,
+    render_html,
+    render_subject,
+    render_text,
+)
 from .scrapers import Fetcher, get_scraper
 from .storage import Repository, SnapshotStore, get_db
 
@@ -267,6 +276,55 @@ class Pipeline:
                 routes[channel].append(finding)
         return dict(routes)
 
+    def _message_for(
+        self, notifier: Notifier, group: Sequence[Finding], report: RunReport
+    ) -> Message:
+        """Render for one channel.
+
+        An inbox gets the full report: what is new since the last one, then the
+        running list behind it, so a single mail answers both "what just
+        happened" and "what has been happening". The console gets the run in
+        front of you and nothing else.
+        """
+        if not notifier.wants_digest:
+            return Message(
+                subject=render_subject(group),
+                text=render_text(group),
+                html=render_html(group),
+                findings=group,
+            )
+
+        status = self._status_line(report)
+        entries = self.repo.discoveries_since(self.settings.digest_days)
+        new_keys = {f.item.key for f in group if f.item}
+        # A finding saved moments ago is already in the window; anything the
+        # window missed still belongs in the report, so union rather than trust.
+        known = {f.item.key for f in entries if f.item}
+        entries = list(entries) + [f for f in group if f.item and f.item.key not in known]
+
+        return Message(
+            subject=render_subject(group, new_count=len(new_keys)),
+            text=render_digest_text(
+                entries, new_keys, status=status, window_days=self.settings.digest_days
+            ),
+            html=render_digest_html(
+                entries, new_keys, status=status, window_days=self.settings.digest_days
+            ),
+            findings=group,
+        )
+
+    def _status_line(self, report: RunReport) -> str:
+        """What the sweep actually managed, so an empty list cannot be misread.
+
+        Without this, "no new entries" means both "nothing was posted" and "we
+        could not reach anything", and those demand opposite responses.
+        """
+        parts = [f"{report.targets_run} target(s) swept", f"{report.items_scraped} item(s) read"]
+        scrape_errors = {k: v for k, v in report.errors.items() if not k.startswith("notify:")}
+        if scrape_errors:
+            parts.append(f"{len(scrape_errors)} FAILED: {', '.join(sorted(scrape_errors))}")
+        return " · ".join(parts)
+
     def _dispatch(
         self,
         findings: Sequence[Finding],
@@ -285,18 +343,12 @@ class Pipeline:
             if dry_run and channel not in ("console", "preview"):
                 channel = "console"
 
-            message = Message(
-                subject=render_subject(group),
-                text=render_text(group),
-                html=render_html(group),
-                findings=group,
-            )
-
             try:
                 notifier = get_notifier(channel, self.settings)
                 ok, why = notifier.available()
                 if not ok:
                     raise RuntimeError(why)
+                message = self._message_for(notifier, group, report)
                 notifier.send(message)
             except Exception as exc:
                 log.error("channel %s failed: %s", channel, exc)

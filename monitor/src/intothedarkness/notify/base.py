@@ -26,6 +26,10 @@ class Message:
 
 class Notifier(ABC):
     name: str = "base"
+    #: Channels that go to a person's inbox get the full report -- what is new
+    #: since the last one, then the running list behind it. The console is read
+    #: while the run is in front of you, so it stays the current run only.
+    wants_digest: bool = False
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings

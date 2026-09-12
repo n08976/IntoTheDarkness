@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     # and less fragile than shared-hosting SMTP.
     resend_api_key: str = ""
 
+    # How far back the running list in an emailed report reaches. The report
+    # leads with what is new since the last one; this is the tail below it.
+    digest_days: int = 60
+
     # Generic webhook sink
     webhook_url: str = ""
 

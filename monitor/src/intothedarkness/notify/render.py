@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from jinja2 import Environment, select_autoescape
 
 from ..models import Finding, FindingKind, Severity
+from .dates import stamp_for
 
 _env = Environment(autoescape=select_autoescape(["html"]))
 
@@ -111,7 +112,7 @@ def group_by_sector(findings: Sequence[Finding]) -> dict[str, list[Finding]]:
 
 def _links(finding: Finding) -> list[str]:
     """The two links a reader actually wants: the leak entry and the victim."""
-    lines: list[str] = []
+    lines: list[str] = [f"      {stamp_for(finding).render()}"]
     item = finding.item
     if item is None:
         return lines
@@ -123,35 +124,55 @@ def _links(finding: Finding) -> list[str]:
     return lines
 
 
+def _newest_first(findings: Sequence[Finding]) -> list[Finding]:
+    """Order by when we learned of it, not by the date the site claims.
+
+    Source dates are informational: two of the sources give none at all and one
+    gives "Sep 1" with no year, so sorting on them would order a list by how
+    well each site happens to timestamp its posts.
+    """
+    return sorted(findings, key=lambda f: f.created_at, reverse=True)
+
+
 def render_digest_text(
-    entries: Sequence[Finding], new_keys: set[str], target_label: str = ""
+    entries: Sequence[Finding],
+    new_keys: set[str],
+    target_label: str = "",
+    status: str = "",
+    window_days: int = 60,
 ) -> str:
     """The full running list, with anything new since the last report first."""
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running = [f for f in entries if not (f.item and f.item.key in new_keys)]
 
     lines = [
-        f"{len(entries)} entries currently listed"
+        f"{len(new)} new since the last report"
         + (f" across {target_label}" if target_label else "")
-        + f" — {len(new)} new since the last report.",
+        + f"; {len(running)} more in the last {window_days} days.",
         "",
     ]
+    if status:
+        lines += [status, ""]
 
     if new:
         lines += [f"NEW SINCE LAST REPORT ({len(new)})", "=" * 46, ""]
         for sector, group in group_by_sector(new).items():
             lines.append(f"-- {sector} ({len(group)})")
-            for f in sorted(group, key=lambda f: (f.item.title if f.item else "").lower()):
+            for f in _newest_first(group):
                 lines.append(f"  * {f.item.summary() if f.item else f.message}")
                 lines += _links(f)
             lines.append("")
     else:
         lines += ["No new entries since the last report.", ""]
 
-    lines += [f"RUNNING LIST ({len(running)})", "=" * 46, ""]
+    lines += [
+        f"DISCOVERED IN THE LAST {window_days} DAYS ({len(running)})",
+        "=" * 46,
+        "",
+    ]
     for sector, group in group_by_sector(running).items():
         lines.append(f"-- {sector} ({len(group)})")
-        for f in sorted(group, key=lambda f: (f.item.title if f.item else "").lower()):
+        for f in _newest_first(group):
             lines.append(f"  - {f.item.summary() if f.item else f.message}")
             lines += _links(f)
         lines.append("")
@@ -251,11 +272,14 @@ _DIGEST_HTML = _env.from_string(
     """
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
             font-size:14px;color:#111827;max-width:720px">
-  <p style="margin:0 0 16px;color:#4b5563">
-    <strong>{{ total }}</strong> entries currently listed —
+  <p style="margin:0 0 6px;color:#4b5563">
     <strong style="color:{{ '#dc2626' if new|length else '#6b7280' }}">
-      {{ new|length }} new</strong> since the last report.
+      {{ new|length }} new</strong> since the last report;
+    <strong>{{ running|length }}</strong> more in the last {{ window_days }} days.
   </p>
+  {% if status %}
+  <p style="margin:0 0 16px;color:#9ca3af;font-size:12px">{{ status }}</p>
+  {% endif %}
 
   {% if new %}
   <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
@@ -276,7 +300,8 @@ _DIGEST_HTML = _env.from_string(
   {% endif %}
 
   <h2 style="font-size:15px;margin:0 0 8px;padding-bottom:4px;
-             border-bottom:1px solid #e5e7eb">Running list ({{ running|length }})</h2>
+             border-bottom:1px solid #e5e7eb">
+    Discovered in the last {{ window_days }} days ({{ running|length }})</h2>
   {% for sector, items in running_by_sector.items() %}
   <h3 style="margin:14px 0 4px;font-size:13px;color:#374151;
              text-transform:uppercase;letter-spacing:.04em">
@@ -295,6 +320,9 @@ _DIGEST_HTML = _env.from_string(
 _ENTRY = _env.from_string(
     """<li style="margin-bottom:6px">
   <strong>{{ f.item.summary() if f.item else f.message }}</strong>
+  <div style="font-size:12px;color:#6b7280;margin-top:1px">
+    <span style="color:#9ca3af">{{ stamp(f).label }}</span> {{ stamp(f).text }}
+  </div>
   {%- if f.item and (f.item.url or f.item.fields.get('website')) %}
   <div style="font-size:12px;margin-top:1px">
     {%- if f.item.url %}
@@ -313,7 +341,12 @@ _ENTRY = _env.from_string(
 )
 
 
-def render_digest_html(entries: Sequence[Finding], new_keys: set[str]) -> str:
+def render_digest_html(
+    entries: Sequence[Finding],
+    new_keys: set[str],
+    status: str = "",
+    window_days: int = 60,
+) -> str:
     from ..models import utcnow
 
     new = [f for f in entries if f.item and f.item.key in new_keys]
@@ -322,9 +355,13 @@ def render_digest_html(entries: Sequence[Finding], new_keys: set[str]) -> str:
         total=len(entries),
         new=new,
         running=running,
-        new_by_sector=group_by_sector(new),
-        running_by_sector=group_by_sector(running),
-        entry=lambda f: _ENTRY.render(f=f),
+        new_by_sector={k: _newest_first(v) for k, v in group_by_sector(new).items()},
+        running_by_sector={
+            k: _newest_first(v) for k, v in group_by_sector(running).items()
+        },
+        entry=lambda f: _ENTRY.render(f=f, stamp=stamp_for),
+        status=status,
+        window_days=window_days,
         now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
 

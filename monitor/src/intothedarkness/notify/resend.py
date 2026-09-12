@@ -22,6 +22,7 @@ ENDPOINT = "https://api.resend.com/emails"
 @register
 class ResendNotifier(Notifier):
     name = "resend"
+    wants_digest = True
 
     def available(self) -> tuple[bool, str]:
         s = self.settings

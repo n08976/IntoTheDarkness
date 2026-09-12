@@ -20,6 +20,7 @@ class PreviewNotifier(Notifier):
     """Save the message as HTML rather than delivering it."""
 
     name = "preview"
+    wants_digest = True
 
     def __init__(self, settings: Settings) -> None:
         super().__init__(settings)

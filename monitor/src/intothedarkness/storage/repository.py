@@ -256,6 +256,35 @@ class Repository:
             rows = [r for r in rows if Severity(r.severity).rank >= min_severity.rank]
         return rows
 
+    def discoveries_since(
+        self, days: int, kinds: Sequence[FindingKind] | None = None, limit: int = 5000
+    ) -> list[Finding]:
+        """Everything we reported in a window, one entry per victim.
+
+        The running list in a report is built from what was *reported*, not from
+        everything on the sites: a silently seeded back catalogue was never shown
+        to anyone, and listing it under "discoveries" would claim we found things
+        we never told you about.
+
+        The same victim often appears from several sources within minutes. The
+        earliest sighting wins, so the list reads as when we learned of it.
+        """
+        since = utcnow() - timedelta(days=days)
+        rows = self.recent_findings(since=since, limit=limit)
+
+        by_victim: dict[str, Finding] = {}
+        for row in sorted(rows, key=lambda r: r.created_at):
+            try:
+                finding = Finding.model_validate(row.payload)
+            except Exception:  # a payload written by an older schema
+                continue
+            if kinds and finding.kind not in kinds:
+                continue
+            item = finding.item
+            victim = (item.title if item else "").strip().lower() or row.dedupe_key
+            by_victim.setdefault(victim, finding)
+        return list(by_victim.values())
+
     def attach_findings_to_case(self, finding_ids: Sequence[int], case_id: int) -> int:
         with self.db.session() as s:
             rows = s.scalars(select(FindingRow).where(FindingRow.id.in_(finding_ids))).all()

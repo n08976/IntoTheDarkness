@@ -12,6 +12,7 @@ from .base import Message, Notifier, register
 @register
 class EmailNotifier(Notifier):
     name = "email"
+    wants_digest = True
 
     def available(self) -> tuple[bool, str]:
         s = self.settings

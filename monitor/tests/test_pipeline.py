@@ -321,3 +321,54 @@ def test_preview_overrides_channels_that_rules_added(settings, repo):
 
 def Capture_sent_count() -> int:
     return len(CapturingNotifier.sent)
+
+
+class InboxNotifier(Notifier):
+    """Stands in for email: a channel whose reader is not watching the run."""
+
+    name = "inbox"
+    wants_digest = True
+    sent: list[Message] = []
+
+    def send(self, message: Message) -> None:
+        InboxNotifier.sent.append(message)
+
+
+def test_inbox_channels_get_the_running_list_and_the_console_does_not(settings, repo):
+    # The console is read while the run is in front of you; an inbox has to
+    # answer both "what just happened" and "what has been happening".
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox", "capture"])])
+        FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+        p.run([target(channels=["inbox", "capture"])])
+
+        digest = InboxNotifier.sent[-1].text
+        plain = CapturingNotifier.sent[-1].text
+
+        assert "NEW SINCE LAST REPORT" in digest
+        assert "DISCOVERED IN THE LAST" in digest
+        assert "Beta" in digest
+        assert "NEW SINCE LAST REPORT" not in plain   # console keeps the run only
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
+
+
+def test_the_report_says_what_the_sweep_managed(settings, repo):
+    # "No new entries" must not be able to mean "we could not reach anything".
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox"])])
+        FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+        p.run([target(channels=["inbox"])])
+        assert "1 target(s) swept" in InboxNotifier.sent[-1].text
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
