@@ -213,6 +213,7 @@ class Pipeline:
         dry_run: bool = False,
         notify: bool = True,
         preview: bool = False,
+        digest: bool = False,
     ) -> RunReport:
         report = RunReport()
         tags_by_target = {t.name: t.tags for t in targets}
@@ -240,6 +241,8 @@ class Pipeline:
         report.findings = self.rules.apply(report.findings, tags_by_target)
 
         if not report.findings:
+            if digest and notify and not dry_run:
+                self._send_daily_digest(targets, report)
             return report
 
         if not dry_run:
@@ -251,6 +254,10 @@ class Pipeline:
             )
             if deliverable:
                 self._dispatch(deliverable, report, dry_run=dry_run, preview=preview)
+            elif digest and not dry_run:
+                # Everything new was inside its cooldown. The daily report still
+                # goes, or a quiet morning is indistinguishable from a dead cron.
+                self._send_daily_digest(targets, report)
 
         return report
 
@@ -302,8 +309,20 @@ class Pipeline:
         known = {f.item.key for f in entries if f.item}
         entries = list(entries) + [f for f in group if f.item and f.item.key not in known]
 
+        days = self.settings.digest_days
+        if new_keys:
+            top = max((f.severity for f in group), key=lambda sev: sev.rank)
+            subject = (
+                f"[{top.value.upper()}] IntoTheDarkness: {len(new_keys)} new — "
+                f"{len(entries)} in the last {days} days"
+            )
+        else:
+            subject = (
+                f"IntoTheDarkness daily: no new entries — {len(entries)} in the last {days} days"
+            )
+
         return Message(
-            subject=render_subject(group, new_count=len(new_keys)),
+            subject=subject,
             text=render_digest_text(
                 entries, new_keys, status=status, window_days=self.settings.digest_days
             ),
@@ -312,6 +331,30 @@ class Pipeline:
             ),
             findings=group,
         )
+
+    def _send_daily_digest(self, targets: Sequence[Target], report: RunReport) -> None:
+        """Send the full report to every inbox channel even though nothing is new.
+
+        Once a day the report goes regardless, as proof of life. Without it a
+        quiet morning and a cron that stopped firing both arrive as an empty
+        inbox, and the reader cannot tell which without a shell on the box.
+        Console channels are skipped: nobody is watching them at 6am.
+        """
+        channels = sorted({c for t in targets if t.enabled for c in t.channels})
+        for channel in channels:
+            try:
+                notifier = get_notifier(channel, self.settings)
+                if not notifier.wants_digest:
+                    continue
+                ok, why = notifier.available()
+                if not ok:
+                    raise RuntimeError(why)
+                notifier.send(self._message_for(notifier, [], report))
+                report.notified.setdefault(channel, 0)
+                log.info("daily digest sent to %s (nothing new)", channel)
+            except Exception as exc:
+                log.error("daily digest to %s failed: %s", channel, exc)
+                report.errors[f"notify:{channel}"] = str(exc)
 
     def _status_line(self, report: RunReport) -> str:
         """What the sweep actually managed, so an empty list cannot be misread.

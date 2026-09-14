@@ -167,6 +167,11 @@ def run(
         False, "--preview",
         help="Write the report as HTML instead of sending it, and print the path.",
     ),
+    digest: bool = typer.Option(
+        False, "--digest",
+        help="Send the full report to inbox channels even if nothing is new "
+             "(the daily proof of life).",
+    ),
     targets_file: Path = typer.Option(None, "--targets", help="Path to targets YAML."),
     rules_file: Path = typer.Option(None, "--rules", help="Path to rules YAML."),
 ) -> None:
@@ -187,7 +192,12 @@ def run(
             f"({', '.join(pipeline.sector_index.sectors)})[/dim]"
         )
     report = pipeline.run(
-        targets, force=force, dry_run=dry_run, notify=not no_notify, preview=preview
+        targets,
+        force=force,
+        dry_run=dry_run,
+        notify=not no_notify,
+        preview=preview,
+        digest=digest,
     )
 
     if preview:

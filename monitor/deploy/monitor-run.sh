@@ -26,6 +26,9 @@ JITTER="${ITD_JITTER_SECONDS:-240}"
 
 # Sweep hours, in US Eastern wall-clock time.
 RUN_HOURS="${ITD_RUN_HOURS:-06 10 14}"
+# At these hours the report goes out even when nothing is new: proof of life,
+# so a quiet morning cannot be mistaken for a cron that stopped firing.
+DIGEST_HOURS="${ITD_DIGEST_HOURS:-06}"
 SCHEDULE_TZ="America/New_York"
 
 log() { printf '%s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"${LOG}"; }
@@ -34,12 +37,18 @@ log() { printf '%s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"${LOG}"; }
 # rules out a systemd timer with its own timezone. So cron fires this every
 # hour and the schedule lives here instead, where America/New_York follows
 # EDT and EST on its own and 6am stays 6am through both.
+DIGEST=""
 if [ "${1:-}" = "--scheduled" ]; then
     now="$(TZ="${SCHEDULE_TZ}" date +%H)"
     case " ${RUN_HOURS} " in
         *" ${now} "*) ;;
         *) exit 0 ;;
     esac
+    case " ${DIGEST_HOURS} " in
+        *" ${now} "*) DIGEST="--digest" ;;
+    esac
+elif [ "${1:-}" = "--digest" ]; then
+    DIGEST="--digest"
 fi
 
 notify() {
@@ -113,7 +122,7 @@ fi
 # leak sites carry interval_minutes: 360, which against sweeps four hours
 # apart would silently skip the middle one, so the per-target interval is
 # deliberately not also a scheduler here.
-out="$("${VENV}/itd" run --force 2>&1)"
+out="$("${VENV}/itd" run --force ${DIGEST} 2>&1)"
 rc=$?
 summary="$(printf '%s\n' "${out}" | grep -E '^[0-9]+ target' | tail -1)"
 printf '%s\n' "${out}" >>"${LOG}"

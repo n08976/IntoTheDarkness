@@ -372,3 +372,44 @@ def test_the_report_says_what_the_sweep_managed(settings, repo):
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+def test_daily_digest_goes_to_the_inbox_even_when_nothing_is_new(settings, repo):
+    # Proof of life. Without it a quiet morning and a dead cron both arrive
+    # as an empty inbox.
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox", "capture"])])          # seeds silently
+        InboxNotifier.sent = []
+        CapturingNotifier.sent = []
+
+        report = p.run([target(channels=["inbox", "capture"])], digest=True)
+
+        assert report.findings == []
+        assert len(InboxNotifier.sent) == 1
+        mail = InboxNotifier.sent[0]
+        assert "no new entries" in mail.subject
+        assert "No new entries since the last report" in mail.text
+        assert "1 target(s) swept" in mail.text
+        assert CapturingNotifier.sent == []                     # console stays quiet
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
+
+
+def test_without_the_digest_flag_a_quiet_run_sends_nothing(settings, repo):
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox"])])
+        InboxNotifier.sent = []
+        p.run([target(channels=["inbox"])])
+        assert InboxNotifier.sent == []
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []

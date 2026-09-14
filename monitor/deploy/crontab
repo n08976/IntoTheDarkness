@@ -4,7 +4,9 @@
 #     (crontab -l; cat deploy/crontab) | crontab -
 # Then verify:  crontab -l
 #
-# Sweeps run at 06:00, 10:00 and 14:00 US Eastern.
+# Sweeps run at 06:00, 10:00 and 14:00 US Eastern. The 06:00 sweep always
+# mails the full report, even with nothing new (ITD_DIGEST_HOURS); the others
+# mail only when there is something to say.
 #
 # The hour is decided inside monitor-run.sh, not here, so cron fires hourly
 # and --scheduled returns immediately on the other 21 hours. Ubuntu's cron
