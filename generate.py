@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """
-Generate the two output artifacts from bookmarks.json:
+Generate the three output artifacts from bookmarks.json:
 
-  - index.html          styled, self-contained dashboard (search + collapsible sections)
-  - tor_bookmarks.html  Netscape bookmark file, importable into Tor Browser / Firefox
+  - index.html                 styled, self-contained dashboard (search + collapsible sections)
+  - tor_bookmarks.html         Chrome tab launcher: one "open these in tabs" button per section
+  - tor_bookmarks_import.html  Netscape bookmark file, importable into Tor Browser / Firefox
 
 Usage:  python3 generate.py
+
+The outputs are committed, so this must reproduce them byte-for-byte from
+the same bookmarks.json. Set GENERATE_STAMP="2026-09-03 15:55 UTC" to pin the
+timestamp and check that with `git diff` -- the launcher and the badge removal
+were once hand-edited into the HTML while this file was left behind, and the
+next person to run it undid both.
 """
 import json
 import html
 import datetime
+import os
 import pathlib
 
 ROOT = pathlib.Path(__file__).parent
@@ -151,6 +159,62 @@ JS = """
   });
 """
 
+LAUNCHER_CSS = """
+  .bar{position:sticky;top:0;z-index:5;background:rgba(11,13,16,.95);backdrop-filter:blur(8px);
+       border-bottom:1px solid var(--border);padding:16px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .bar-hint{color:var(--muted);font-size:13px}
+  .open-sec{background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:7px;
+       padding:6px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .open-sec:hover{border-color:var(--accent)}
+  .msg{font-size:13px;margin:0}
+  .msg.ok{color:var(--clear)} .msg.warn{color:#ffcf7a}
+  .cat-head{display:flex;align-items:center;gap:12px;justify-content:space-between;margin:0 16px}
+  .cat-head h2{font-size:15px;margin:14px 0 8px}
+  .entry{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;flex-wrap:wrap}
+  .entry:hover{background:var(--panel-2)}
+  .lnk{color:var(--accent);text-decoration:none;font-weight:600}
+  .lnk:hover{text-decoration:underline}
+  .u{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 300px;min-width:0}
+"""
+
+LAUNCHER_JS = """
+  function openTabs(urls){
+    // Open one background/foreground tab per URL. Chrome blocks all but the
+    // first until pop-ups are allowed for this page — see the on-page note.
+    var blocked = 0;
+    urls.forEach(function(u){
+      var w = window.open(u, '_blank');
+      if(!w) blocked++;
+    });
+    var msg = document.getElementById('msg');
+    if(blocked > 0){
+      msg.textContent = 'Chrome blocked ' + blocked + ' of ' + urls.length +
+        ' tabs. Click the blocked-pop-ups icon in the address bar, choose ' +
+        '"Always allow pop-ups from this site", then click again.';
+      msg.className = 'msg warn';
+    } else {
+      msg.textContent = 'Opened ' + urls.length + ' tab' + (urls.length===1?'':'s') + '.';
+      msg.className = 'msg ok';
+    }
+  }
+  function urlsFrom(scope){
+    return Array.prototype.map.call(scope.querySelectorAll('a.lnk'), function(a){ return a.href; });
+  }
+  document.querySelectorAll('.open-sec').forEach(function(b){
+    b.addEventListener('click', function(){
+      openTabs(urlsFrom(b.closest('section')));
+    });
+  });
+"""
+
+
+def stamp() -> str:
+    """Now, unless pinned -- pinning is how the outputs are proven reproducible."""
+    return os.environ.get("GENERATE_STAMP") or datetime.datetime.now(
+        datetime.timezone.utc
+    ).strftime("%Y-%m-%d %H:%M UTC")
+
 
 def load():
     with open(DATA, "r", encoding="utf-8") as f:
@@ -166,7 +230,7 @@ def esc(s: str) -> str:
 
 
 def build_dashboard(data: dict) -> str:
-    gen = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    gen = stamp()
     total = sum(len(c["links"]) for c in data["categories"])
     ncat = len(data["categories"])
 
@@ -176,15 +240,13 @@ def build_dashboard(data: dict) -> str:
         for link in cat["links"]:
             url = esc(link["url"])
             raw = link["url"]
-            badge = ('<span class="badge onion">onion</span>' if is_onion(raw)
-                     else '<span class="badge clear">clearnet</span>')
+            # No onion/clearnet badge: the address itself says which it is.
             search_attr = esc((link["title"] + " " + raw).lower())
             rows.append(
                 '        <li class="entry" data-search="' + search_attr + '">\n'
                 '          <div class="entry-main">\n'
                 '            <a class="entry-link" href="' + url + '" target="_blank" rel="noopener noreferrer">'
                 + esc(link["title"]) + '</a>\n'
-                '            ' + badge + '\n'
                 '          </div>\n'
                 '          <div class="entry-url" title="' + url + '">' + url + '</div>\n'
                 '          <button class="copy" data-url="' + url + '">copy</button>\n'
@@ -250,12 +312,64 @@ def build_netscape(data: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def build_launcher(data: dict) -> str:
+    """Chrome tab launcher: every link is a plain anchor, one button per section."""
+    gen = stamp()
+    total = sum(len(c["links"]) for c in data["categories"])
+
+    sections = []
+    for cat in data["categories"]:
+        rows = []
+        for link in cat["links"]:
+            url = esc(link["url"])
+            rows.append(
+                '        <li class="entry"><a class="lnk" href="' + url
+                + '" target="_blank" rel="noopener noreferrer">' + esc(link["title"])
+                + '</a> <span class="u">' + url + '</span></li>'
+            )
+        sections.append(
+            '    <section class="cat">\n'
+            '      <div class="cat-head"><h2>' + esc(cat["name"]) + '</h2>'
+            '<button class="open-sec">Open these ' + str(len(cat["links"])) + ' in tabs</button></div>\n'
+            '      <ul class="entries">\n' + "\n".join(rows) + '\n      </ul>\n'
+            '    </section>'
+        )
+
+    return (
+        '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+        '<meta charset="UTF-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        '<title>' + esc(data["title"]) + ' — Tab Launcher</title>\n'
+        '<style>' + CSS + LAUNCHER_CSS + '</style>\n'
+        '</head>\n<body>\n'
+        '<div class="bar">\n'
+        '  <span class="bar-hint">Open a category in its own tabs with the section buttons below.</span>\n'
+        '  <p class="msg" id="msg"></p>\n'
+        '</div>\n'
+        '<main>\n'
+        '  <p class="opsec"><strong>Two things to know:</strong> the first time you click, Chrome blocks the extra tabs '
+        '— click the blocked-pop-ups icon in the address bar, choose &ldquo;Always allow pop-ups from this site&rdquo;, '
+        'then click again. And <strong>.onion links only load if Chrome is routed through Tor</strong> '
+        '(a SOCKS proxy/extension); otherwise those tabs will fail to connect. Use Tor Browser for onion sites, '
+        'or the styled dashboard (index.html) for browsing.</p>\n'
+        + "\n".join(sections) + '\n'
+        '</main>\n'
+        '<footer>IntoTheDarkness tab launcher · ' + str(total) + ' links · generated ' + gen + '</footer>\n'
+        '<script>' + LAUNCHER_JS + '</script>\n'
+        '</body>\n</html>\n'
+    )
+
+
 def main():
     data = load()
     (ROOT / "index.html").write_text(build_dashboard(data), encoding="utf-8")
-    (ROOT / "tor_bookmarks.html").write_text(build_netscape(data), encoding="utf-8")
+    (ROOT / "tor_bookmarks.html").write_text(build_launcher(data), encoding="utf-8")
+    (ROOT / "tor_bookmarks_import.html").write_text(build_netscape(data), encoding="utf-8")
     total = sum(len(c["links"]) for c in data["categories"])
-    print(f"Wrote index.html and tor_bookmarks.html ({total} links, {len(data['categories'])} sections)")
+    print(
+        f"Wrote index.html, tor_bookmarks.html and tor_bookmarks_import.html "
+        f"({total} links, {len(data['categories'])} sections)"
+    )
 
 
 if __name__ == "__main__":
