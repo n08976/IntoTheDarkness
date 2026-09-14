@@ -9,7 +9,7 @@ from jinja2 import Environment, select_autoescape
 from markupsafe import Markup
 
 from ..models import Finding, FindingKind, Severity
-from .dates import stamp_for
+from .dates import sort_key, stamp_for
 
 _env = Environment(autoescape=select_autoescape(["html"]))
 
@@ -126,13 +126,12 @@ def _links(finding: Finding) -> list[str]:
 
 
 def _newest_first(findings: Sequence[Finding]) -> list[Finding]:
-    """Order by when we learned of it, not by the date the site claims.
+    """Newest first by the displayed date; see dates.sort_key for why."""
+    return sorted(findings, key=sort_key, reverse=True)
 
-    Source dates are informational: two of the sources give none at all and one
-    gives "Sep 1" with no year, so sorting on them would order a list by how
-    well each site happens to timestamp its posts.
-    """
-    return sorted(findings, key=lambda f: f.created_at, reverse=True)
+
+def _sector_of(finding: Finding) -> str:
+    return (finding.item.sector if finding.item else None) or "unknown"
 
 
 def render_digest_text(
@@ -155,28 +154,27 @@ def render_digest_text(
     if status:
         lines += [status, ""]
 
+    # One flat list per section, newest first. Sector is printed on each entry
+    # rather than used as a heading: headings would split the timeline, and the
+    # reader asked for a timeline.
     if new:
         lines += [f"NEW SINCE LAST REPORT ({len(new)})", "=" * 46, ""]
-        for sector, group in group_by_sector(new).items():
-            lines.append(f"-- {sector} ({len(group)})")
-            for f in _newest_first(group):
-                lines.append(f"  * {f.item.summary() if f.item else f.message}")
-                lines += _links(f)
-            lines.append("")
+        for f in _newest_first(new):
+            lines.append(f"  * [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
+            lines += _links(f)
+        lines.append("")
     else:
         lines += ["No new entries since the last report.", ""]
 
     lines += [
-        f"DISCOVERED IN THE LAST {window_days} DAYS ({len(running)})",
+        f"DISCOVERED IN THE LAST {window_days} DAYS ({len(running)}) — newest first",
         "=" * 46,
         "",
     ]
-    for sector, group in group_by_sector(running).items():
-        lines.append(f"-- {sector} ({len(group)})")
-        for f in _newest_first(group):
-            lines.append(f"  - {f.item.summary() if f.item else f.message}")
-            lines += _links(f)
-        lines.append("")
+    for f in _newest_first(running):
+        lines.append(f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
+        lines += _links(f)
+    lines.append("")
 
     return "\n".join(lines).rstrip()
 
@@ -287,14 +285,9 @@ _DIGEST_HTML = _env.from_string(
               margin-bottom:24px;background:#fef2f2">
     <h2 style="font-size:15px;margin:12px 0 8px;color:#991b1b">
       New since last report ({{ new|length }})</h2>
-    {% for sector, items in new_by_sector.items() %}
-    <h3 style="margin:12px 0 4px;font-size:13px;color:#374151;
-               text-transform:uppercase;letter-spacing:.04em">
-      {{ sector }} ({{ items|length }})</h3>
-    <ul style="margin:0;padding-left:18px">
-      {% for f in items %}{{ entry(f) }}{% endfor %}
+    <ul style="margin:8px 0 0;padding-left:18px">
+      {% for f in new %}{{ entry(f) }}{% endfor %}
     </ul>
-    {% endfor %}
   </div>
   {% else %}
   <p style="margin:0 0 20px;color:#6b7280">No new entries since the last report.</p>
@@ -302,15 +295,11 @@ _DIGEST_HTML = _env.from_string(
 
   <h2 style="font-size:15px;margin:0 0 8px;padding-bottom:4px;
              border-bottom:1px solid #e5e7eb">
-    Discovered in the last {{ window_days }} days ({{ running|length }})</h2>
-  {% for sector, items in running_by_sector.items() %}
-  <h3 style="margin:14px 0 4px;font-size:13px;color:#374151;
-             text-transform:uppercase;letter-spacing:.04em">
-    {{ sector }} ({{ items|length }})</h3>
-  <ul style="margin:0;padding-left:18px">
-    {% for f in items %}{{ entry(f) }}{% endfor %}
+    Discovered in the last {{ window_days }} days ({{ running|length }})
+    <span style="font-weight:normal;color:#9ca3af;font-size:12px">newest first</span></h2>
+  <ul style="margin:8px 0 0;padding-left:18px">
+    {% for f in running %}{{ entry(f) }}{% endfor %}
   </ul>
-  {% endfor %}
 
   <p style="margin-top:24px;color:#9ca3af;font-size:12px">
     IntoTheDarkness · {{ now }}</p>
@@ -321,6 +310,8 @@ _DIGEST_HTML = _env.from_string(
 _ENTRY = _env.from_string(
     """<li style="margin-bottom:6px">
   <strong>{{ f.item.summary() if f.item else f.message }}</strong>
+  <span style="font-size:11px;color:#6b7280;text-transform:uppercase;
+               letter-spacing:.04em;margin-left:6px">{{ sector }}</span>
   <div style="font-size:12px;color:#6b7280;margin-top:1px">
     <span style="color:#9ca3af">{{ stamp(f).label }}</span> {{ stamp(f).text }}
   </div>
@@ -354,15 +345,11 @@ def render_digest_html(
     running = [f for f in entries if not (f.item and f.item.key in new_keys)]
     return _DIGEST_HTML.render(
         total=len(entries),
-        new=new,
-        running=running,
-        new_by_sector={k: _newest_first(v) for k, v in group_by_sector(new).items()},
-        running_by_sector={
-            k: _newest_first(v) for k, v in group_by_sector(running).items()
-        },
+        new=_newest_first(new),
+        running=_newest_first(running),
         # The entry is already-rendered HTML. Without Markup, autoescape on
         # the outer template turns every <li> into literal text in the mail.
-        entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for)),
+        entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for, sector=_sector_of(f))),
         status=status,
         window_days=window_days,
         now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),

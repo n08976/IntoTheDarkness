@@ -55,3 +55,28 @@ def test_no_source_date_falls_back_to_our_clock_and_says_so():
 
 def test_a_bare_date_does_not_gain_a_fake_midnight():
     assert "00:00" not in stamp_for(finding(discovered="2026-08-24")).text
+
+
+def test_history_is_ordered_by_the_date_the_reader_sees():
+    # Sorting on discovery time while printing the source's published date
+    # produced a list whose visible dates jumped around. The sort key must be
+    # the printed value.
+    from intothedarkness.notify.dates import sort_key
+
+    early_seen_late_published = finding(discovered="2026-09-10")   # created SEEN (09-12)
+    late_seen_early_published = finding(discovered="2026-08-01")
+    ordered = sorted([late_seen_early_published, early_seen_late_published],
+                     key=sort_key, reverse=True)
+    assert [stamp_for(f).text for f in ordered] == ["2026-09-10", "2026-08-01"]
+
+
+def test_an_unparseable_date_sorts_by_when_we_learned_of_it():
+    # "Sep 1" has no year and gets no invented one; it takes its position from
+    # discovery time rather than being forced to the top or the bottom.
+    from intothedarkness.notify.dates import sort_key
+
+    unparseable = finding(published="Sep 1")                      # created SEEN
+    older = finding(discovered="2026-08-01")
+    newer = finding(discovered="2026-09-13")
+    ordered = sorted([older, unparseable, newer], key=sort_key, reverse=True)
+    assert [stamp_for(f).label for f in ordered] == [PUBLISHED, AS_REPORTED, PUBLISHED]

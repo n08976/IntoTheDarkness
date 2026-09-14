@@ -101,3 +101,22 @@ def stamp_for(finding) -> Stamp:  # noqa: ANN001 - Finding, avoiding a circular 
 
     fallback = getattr(item, "seen_at", None) or finding.created_at
     return Stamp(FIRST_SEEN, _format(fallback, had_time=True), fallback)
+
+
+def sort_key(finding) -> tuple:  # noqa: ANN001 - Finding, avoiding a circular import
+    """Newest first, by the date the reader will actually see.
+
+    The list is sorted on the same value that is printed beside each entry,
+    because a reader can only see the printed one: sorting on our discovery
+    time while showing the site's published date produced a list whose dates
+    visibly jumped around, and "mixed up" was the fair description.
+
+    An entry whose source date could not be parsed ("Sep 1") has nothing to
+    sort on, so it takes its position from when we learned of it -- roughly
+    where it belongs, without inventing a date to put on it. Discovery time
+    breaks ties so two posts from the same day still read newest first.
+    """
+    stamp = stamp_for(finding)
+    primary = stamp.when or finding.created_at
+    key = finding.item.key if finding.item else ""
+    return (primary, finding.created_at, key)

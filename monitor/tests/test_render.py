@@ -56,3 +56,31 @@ def test_digest_html_entries_are_real_markup_not_escaped_text():
     html = render_digest_html([f], {"k"})
     assert "<li " in html and "&lt;li" not in html
     assert "<strong>Acme Hospital</strong>" in html
+
+
+def test_running_list_is_one_flat_list_newest_first_with_sector_inline():
+    # Sector headings split the timeline; the reader asked for a timeline.
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    def f(key, title, sector, discovered):
+        fields = {"sector": sector, "discovered": discovered}
+        item = Item(key=key, target="t", title=title, fields=fields)
+        return Finding(kind=FindingKind.NEW, target="t", item=item,
+                       created_at=datetime(2026, 9, 12, tzinfo=UTC))
+
+    entries = [
+        f("a", "Older Clinic", "healthcare", "2026-08-01"),
+        f("b", "Mid Widgets", "manufacturing", "2026-08-15"),
+        f("c", "Newest Hospital", "healthcare", "2026-09-10"),
+    ]
+    text = render_digest_text(entries, set())
+    body = text.split("DISCOVERED IN THE LAST", 1)[1]
+    assert body.index("Newest Hospital") < body.index("Mid Widgets") < body.index("Older Clinic")
+    assert "-- healthcare" not in text                     # no sector headings
+    assert "[manufacturing] Mid Widgets" in text           # sector inline instead
+
+    html = render_digest_html(entries, set())
+    assert html.index("Newest Hospital") < html.index("Mid Widgets") < html.index("Older Clinic")
