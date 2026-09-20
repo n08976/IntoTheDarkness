@@ -80,3 +80,9 @@ def test_an_unparseable_date_sorts_by_when_we_learned_of_it():
     newer = finding(discovered="2026-09-13")
     ordered = sorted([older, unparseable, newer], key=sort_key, reverse=True)
     assert [stamp_for(f).label for f in ordered] == [PUBLISHED, AS_REPORTED, PUBLISHED]
+
+
+def test_rfc_2822_pubdate_from_an_rss_feed_is_parsed_and_labelled_published():
+    stamp = stamp_for(finding(published="Sun, 20 Sep 2026 13:21:17 +0000"))
+    assert (stamp.label, stamp.text) == (PUBLISHED, "2026-09-20 13:21 UTC")
+    assert stamp.when is not None

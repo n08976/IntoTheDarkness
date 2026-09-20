@@ -6,6 +6,7 @@ from .embedded import EmbeddedJsonScraper, extract_payloads
 from .fetch import Fetcher, FetchError, Network, Response, TorNotConfigured, resolve_network
 from .html import CssScraper, PageScraper
 from .json_api import JsonScraper
+from .rss import RssScraper
 
 __all__ = [
     "REGISTRY",
@@ -18,6 +19,7 @@ __all__ = [
     "Network",
     "PageScraper",
     "Response",
+    "RssScraper",
     "Scraper",
     "TorNotConfigured",
     "available",

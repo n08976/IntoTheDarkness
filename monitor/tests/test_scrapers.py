@@ -209,3 +209,75 @@ def test_json_scraper_still_accepts_a_single_record_object():
     )
     items = get_scraper("json", FakeFetcher(payload)).scrape(target)
     assert [i.title for i in items] == ["Only"]
+
+
+RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel><title>Wire</title><link>https://wire.example/</link>
+<item>
+  <title>Mercy Hospital hit by ransomware</title>
+  <link>https://wire.example/mercy-hospital</link>
+  <guid isPermaLink="false">https://wire.example/?p=41</guid>
+  <pubDate>Sun, 20 Sep 2026 13:21:17 +0000</pubDate>
+  <category><![CDATA[Breaches]]></category>
+  <description><![CDATA[<p>Systems <b>offline</b> since Friday.</p>]]></description>
+</item>
+<item>
+  <title>Quiet week</title>
+  <link>/relative-path</link>
+  <pubDate>Sat, 19 Sep 2026 08:00:00 +0000</pubDate>
+</item>
+</channel></rss>"""
+
+ATOM = """<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Advisories</title>
+<entry>
+  <title>AA26-263A: Actors exploiting clinic VPNs</title>
+  <link rel="alternate" href="https://adv.example/aa26-263a"/>
+  <link rel="enclosure" href="https://adv.example/aa26-263a.pdf"/>
+  <id>urn:uuid:1</id>
+  <updated>2026-09-20T10:00:00Z</updated>
+  <summary>Patch now.</summary>
+</entry></feed>"""
+
+
+def test_rss_scraper_reads_links_dates_and_strips_html_from_bodies():
+    # Parsed as XML on purpose: an HTML parser treats RSS <link> as a void
+    # element and drops the article URL without any error.
+    target = Target(name="wire", url="https://wire.example/feed/", scraper="rss")
+    items = get_scraper("rss", FakeFetcher(RSS, url="https://wire.example/feed/")).scrape(target)
+
+    assert [i.title for i in items] == ["Mercy Hospital hit by ransomware", "Quiet week"]
+    assert items[0].url == "https://wire.example/mercy-hospital"
+    assert items[1].url == "https://wire.example/relative-path"      # resolved
+    assert items[0].fields["published"] == "Sun, 20 Sep 2026 13:21:17 +0000"
+    assert items[0].fields["guid"] == "https://wire.example/?p=41"
+    assert items[0].fields["category"] == "Breaches"
+    assert items[0].text == "Systems offline since Friday."         # HTML gone
+    assert items[0].key != items[1].key
+
+
+def test_rss_scraper_keys_on_guid_so_a_retitled_post_is_not_a_new_one():
+    target = Target(name="wire", url="https://wire.example/feed/", scraper="rss")
+    first = get_scraper("rss", FakeFetcher(RSS)).scrape(target)[0]
+    retitled = RSS.replace("Mercy Hospital hit by ransomware", "UPDATED: Mercy Hospital")
+    second = get_scraper("rss", FakeFetcher(retitled)).scrape(target)[0]
+    assert first.key == second.key
+
+
+def test_rss_scraper_handles_atom_and_prefers_the_alternate_link():
+    target = Target(name="adv", url="https://adv.example/feed", scraper="rss")
+    items = get_scraper("rss", FakeFetcher(ATOM)).scrape(target)
+    assert len(items) == 1
+    assert items[0].url == "https://adv.example/aa26-263a"          # not the pdf
+    assert items[0].fields["published"] == "2026-09-20T10:00:00Z"
+    assert items[0].text == "Patch now."
+
+
+def test_rss_scraper_rejects_a_body_that_is_not_a_feed():
+    # A Cloudflare challenge page is HTML with no feed root; it must be an
+    # error, not an empty feed that reads as "nothing new".
+    target = Target(name="wire", url="https://wire.example/feed/", scraper="rss")
+    with pytest.raises(ValueError, match="not an RSS or Atom feed"):
+        challenge = "<html><title>Just a moment...</title></html>"
+        get_scraper("rss", FakeFetcher(challenge)).scrape(target)

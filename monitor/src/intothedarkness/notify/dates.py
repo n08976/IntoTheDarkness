@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 # Field names the sources use for their own timestamp, in order of preference.
 SOURCE_TIME_FIELDS = ("discovered", "published", "date", "added")
@@ -69,6 +70,12 @@ def _parse(raw: str) -> datetime | None:
                 break
             except ValueError:
                 continue
+    if parsed is None:
+        # RFC 2822, "Sun, 20 Sep 2026 13:21:17 +0000": what RSS puts in pubDate.
+        try:
+            parsed = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            parsed = None
     if parsed is None:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
