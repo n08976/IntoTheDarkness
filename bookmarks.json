@@ -107,7 +107,8 @@
         { "title": "RansomLook", "url": "https://www.ransomlook.io/" },
         { "title": "SOCRadar — Healthcare Data Breaches", "url": "https://socradar.io/data-breach/healthcare/" },
         { "title": "SOCRadar — Data Breaches by Industry", "url": "https://socradar.io/data-breach/industry/" },
-        { "title": "UnderCode News", "url": "https://undercodenews.com/" }
+        { "title": "UnderCode News", "url": "https://undercodenews.com/" },
+        { "title": "Darkfield — Ransomware Victims", "url": "https://darkfield.orizon.one/victims" }
       ]
     },
     {
