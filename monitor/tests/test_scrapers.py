@@ -281,3 +281,36 @@ def test_rss_scraper_rejects_a_body_that_is_not_a_feed():
     with pytest.raises(ValueError, match="not an RSS or Atom feed"):
         challenge = "<html><title>Just a moment...</title></html>"
         get_scraper("rss", FakeFetcher(challenge)).scrape(target)
+
+
+DARKFIELD = """<?xml version="1.0"?><rss version="2.0"><channel><title>Darkfield</title>
+<item><title>Hudson MD Group, LLC — claimed by metaencryptor</title>
+  <link>https://darkfield.orizon.one/victims/cf49d648</link>
+  <pubDate>Mon, 21 Sep 2026 13:08:14 GMT</pubDate>
+  <description>Healthcare · US · data_published</description></item>
+<item><title>Weekly roundup</title>
+  <link>https://darkfield.orizon.one/pulse/1</link>
+  <pubDate>Mon, 21 Sep 2026 09:00:00 GMT</pubDate>
+  <description>Editorial</description></item>
+</channel></rss>"""
+
+
+def test_darkfield_unpacks_victim_operator_sector_and_country():
+    # Darkfield's feed writes the facts as prose; the pipeline wants the
+    # victim as the title and the rest as fields, with the sector counted as
+    # an upstream label rather than a guess from the name.
+    target = Target(name="df", url="https://darkfield.orizon.one/feed.xml", scraper="darkfield")
+    items = get_scraper("darkfield", FakeFetcher(DARKFIELD)).scrape(target)
+
+    assert items[0].title == "Hudson MD Group, LLC"
+    assert items[0].fields["group"] == "metaencryptor"
+    assert items[0].fields["sector"] == "Healthcare"
+    assert items[0].fields["country"] == "US"
+    assert items[0].fields["status"] == "data_published"
+    assert items[0].fields["published"] == "Mon, 21 Sep 2026 13:08:14 GMT"
+    assert items[0].url.endswith("/victims/cf49d648")
+
+    # An entry that is not a claim passes through untouched.
+    assert items[1].title == "Weekly roundup"
+    assert "group" not in items[1].fields
+    assert items[1].fields["sector"] == "Editorial"
