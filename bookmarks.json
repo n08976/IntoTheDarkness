@@ -108,7 +108,8 @@
         { "title": "SOCRadar — Healthcare Data Breaches", "url": "https://socradar.io/data-breach/healthcare/" },
         { "title": "SOCRadar — Data Breaches by Industry", "url": "https://socradar.io/data-breach/industry/" },
         { "title": "UnderCode News", "url": "https://undercodenews.com/" },
-        { "title": "Darkfield — Ransomware Victims", "url": "https://darkfield.orizon.one/victims" }
+        { "title": "Darkfield — Ransomware Victims", "url": "https://darkfield.orizon.one/victims" },
+        { "title": "Darkfield — Healthcare Sector Dossier", "url": "https://darkfield.orizon.one/sectors/healthcare" }
       ]
     },
     {
