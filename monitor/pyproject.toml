@@ -63,3 +63,5 @@ ignore_missing_imports = true
 [tool.ruff.lint.per-file-ignores]
 # Typer's whole API is `x: T = typer.Option(...)` in the signature.
 "src/intothedarkness/cli.py" = ["B008"]
+# Verbatim Telegram posts as test fixtures; wrapping them would falsify the sample.
+"tests/test_ctiwatch.py" = ["E501"]

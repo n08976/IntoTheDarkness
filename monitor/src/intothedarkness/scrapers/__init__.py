@@ -1,5 +1,6 @@
 """Scraper backends. Importing this package registers the built-ins."""
 
+from . import ctiwatch as _ctiwatch  # noqa: F401  registers the "ctiwatch" scraper
 from . import darkfield as _darkfield  # noqa: F401  registers the "darkfield" scraper
 from .base import REGISTRY, Scraper, available, get_scraper, register, register_function
 from .dls import DlsScraper, identity_key, normalize_name
