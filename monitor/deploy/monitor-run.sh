@@ -24,12 +24,22 @@ CONTROL_PORT=9051
 # which is a needlessly legible pattern. Set ITD_JITTER_SECONDS=0 to disable.
 JITTER="${ITD_JITTER_SECONDS:-240}"
 
-# Sweep hours, in US Eastern wall-clock time.
-RUN_HOURS="${ITD_RUN_HOURS:-06 10 14}"
+# Sweep hours, in US Eastern wall-clock time: hourly 07-22 on weekdays,
+# every four hours in the same window at weekends. ITD_RUN_HOURS, if set,
+# overrides both.
+SCHEDULE_TZ="America/New_York"
+WEEKDAY_HOURS="${ITD_RUN_HOURS_WEEKDAY:-07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22}"
+WEEKEND_HOURS="${ITD_RUN_HOURS_WEEKEND:-07 11 15 19}"
+if [ -n "${ITD_RUN_HOURS:-}" ]; then
+    RUN_HOURS="${ITD_RUN_HOURS}"
+elif [ "$(TZ="${SCHEDULE_TZ}" date +%u)" -ge 6 ]; then
+    RUN_HOURS="${WEEKEND_HOURS}"
+else
+    RUN_HOURS="${WEEKDAY_HOURS}"
+fi
 # At these hours the report goes out even when nothing is new: proof of life,
 # so a quiet morning cannot be mistaken for a cron that stopped firing.
-DIGEST_HOURS="${ITD_DIGEST_HOURS:-06}"
-SCHEDULE_TZ="America/New_York"
+DIGEST_HOURS="${ITD_DIGEST_HOURS:-07}"
 
 log() { printf '%s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"${LOG}"; }
 
