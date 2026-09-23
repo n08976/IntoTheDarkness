@@ -24,6 +24,7 @@ from .notify import (
     render_subject,
     render_text,
 )
+from .notify.links import merge_links
 from .scrapers import Fetcher, get_scraper
 from .storage import Repository, SnapshotStore, get_db
 
@@ -345,6 +346,36 @@ class Pipeline:
                     f.item.fields["watchlist"] = vendor.name
                     break
 
+    def _add_observed_vendor_victims(self, entries: list[Finding]) -> list[Finding]:
+        """Vendor listings the rules never reported, found in raw observations."""
+        vendors = self._vendors()
+        if not vendors:
+            return entries
+        skip = set(self.settings.watchlist_skip_tags)
+        tags = getattr(self, "_tags", {})
+        skip_targets = {t for t, tg in tags.items() if skip & set(tg)}
+        floors = getattr(self, "_floors", None) or {}
+        known = {f.item.title.strip().lower() for f in entries if f.item}
+        extra: dict[str, Finding] = {}
+        observed = self.repo.observations_since(self.settings.digest_days, skip_targets)
+        for f in sorted(observed, key=lambda x: x.created_at):
+            if f.item is None:
+                continue
+            key = f.item.title.strip().lower()
+            if key in known:
+                continue
+            vendor = next((v for v in vendors if v.matches(f.item.title)), None)
+            if vendor is None:
+                continue
+            f.item.fields["watchlist"] = vendor.name
+            if not f.item.url and floors.get(f.target):
+                f.item.url = floors[f.target]
+            if key in extra:
+                merge_links(extra[key], f)
+            else:
+                extra[key] = f
+        return list(extra.values()) + entries
+
     def _send_urgent(
         self, findings: Sequence[Finding], report: RunReport, dry_run: bool = False
     ) -> None:
@@ -429,8 +460,10 @@ class Pipeline:
             self.settings.digest_days, floors=getattr(self, "_floors", None)
         )
         # Entries recorded before the watchlist existed, or before a vendor was
-        # added to it, still belong at the top of the report.
+        # added to it, still belong at the top of the report -- including ones
+        # the rules never saved as findings, which exist only as observations.
         self._flag_watchlist(entries)
+        entries = self._add_observed_vendor_victims(entries)
         new_keys = {f.item.key for f in group if f.item}
         # A finding saved moments ago is already in the window; anything the
         # window missed still belongs in the report, so union rather than trust.
@@ -449,11 +482,14 @@ class Pipeline:
                 f"IntoTheDarkness daily: no new entries — {len(entries)} in the last {days} days"
             )
 
+        s = self.settings
         text = render_digest_text(
-            entries, new_keys, status=status, window_days=self.settings.digest_days
+            entries, new_keys, status=status, window_days=s.digest_days,
+            priority=s.priority_sectors, carry=s.digest_sectors,
         )
         html = render_digest_html(
-            entries, new_keys, status=status, window_days=self.settings.digest_days
+            entries, new_keys, status=status, window_days=s.digest_days,
+            priority=s.priority_sectors, carry=s.digest_sectors,
         )
         return Message(subject=subject, text=text, html=html, findings=group)
 

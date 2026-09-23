@@ -145,17 +145,38 @@ def _sector_of(finding: Finding) -> str:
     return (finding.item.sector if finding.item else None) or "unknown"
 
 
+def _priority_first(findings: Sequence[Finding], priority: Sequence[str]) -> list[Finding]:
+    """Priority sectors first, then the rest; newest first within each."""
+    pri = {p.lower() for p in priority}
+    top = [f for f in findings if _sector_of(f).lower() in pri]
+    rest = [f for f in findings if _sector_of(f).lower() not in pri]
+    return _newest_first(top) + _newest_first(rest)
+
+
+def _carried(findings: Sequence[Finding], carry: Sequence[str]) -> tuple[list[Finding], int]:
+    """The running list carries only these sectors; the rest are counted."""
+    if not carry:
+        return list(findings), 0
+    keep = {c.lower() for c in carry}
+    kept = [f for f in findings if _sector_of(f).lower() in keep]
+    return kept, len(findings) - len(kept)
+
+
 def render_digest_text(
     entries: Sequence[Finding],
     new_keys: set[str],
     target_label: str = "",
     status: str = "",
     window_days: int = 60,
+    priority: Sequence[str] = ("healthcare",),
+    carry: Sequence[str] = ("healthcare",),
 ) -> str:
     """The full running list, with anything new since the last report first."""
     vendors, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
-    running = [f for f in entries if not (f.item and f.item.key in new_keys)]
+    running, uncarried = _carried(
+        [f for f in entries if not (f.item and f.item.key in new_keys)], carry
+    )
 
     lines = [
         f"{len(new)} new since the last report"
@@ -189,22 +210,32 @@ def render_digest_text(
     # rather than used as a heading: headings would split the timeline, and the
     # reader asked for a timeline.
     if new:
-        lines += [f"NEW SINCE LAST REPORT ({len(new)})", "=" * 46, ""]
-        for f in _newest_first(new):
+        pri = {p.lower() for p in priority}
+        n_pri = sum(1 for f in new if _sector_of(f).lower() in pri)
+        label = ", ".join(priority)
+        lines += [
+            f"NEW SINCE LAST REPORT ({len(new)}) — {n_pri} {label} first, then other sectors",
+            "=" * 46,
+            "",
+        ]
+        for f in _priority_first(new, priority):
             lines.append(f"  * [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
             lines += _links(f)
         lines.append("")
     else:
         lines += ["No new entries since the last report.", ""]
 
+    carried = ", ".join(carry) if carry else "all sectors"
     lines += [
-        f"DISCOVERED IN THE LAST {window_days} DAYS ({len(running)}) — newest first",
+        f"DISCOVERED IN THE LAST {window_days} DAYS — {carried} ({len(running)}), newest first",
         "=" * 46,
         "",
     ]
     for f in _newest_first(running):
         lines.append(f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
         lines += _links(f)
+    if uncarried:
+        lines.append(f"  … plus {uncarried} entries in other sectors, not listed.")
     lines.append("")
 
     return "\n".join(lines).rstrip()
@@ -329,7 +360,9 @@ _DIGEST_HTML = _env.from_string(
   <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
               margin-bottom:24px;background:#fef2f2">
     <h2 style="font-size:15px;margin:12px 0 8px;color:#991b1b">
-      New since last report ({{ new|length }})</h2>
+      New since last report ({{ new|length }})
+      <span style="font-weight:normal;color:#b91c1c;font-size:12px">
+        {{ priority_label }} first, then other sectors</span></h2>
     <ul style="margin:8px 0 0;padding-left:18px">
       {% for f in new %}{{ entry(f) }}{% endfor %}
     </ul>
@@ -340,11 +373,15 @@ _DIGEST_HTML = _env.from_string(
 
   <h2 style="font-size:15px;margin:0 0 8px;padding-bottom:4px;
              border-bottom:1px solid #e5e7eb">
-    Discovered in the last {{ window_days }} days ({{ running|length }})
+    Discovered in the last {{ window_days }} days — {{ carried }} ({{ running|length }})
     <span style="font-weight:normal;color:#9ca3af;font-size:12px">newest first</span></h2>
   <ul style="margin:8px 0 0;padding-left:18px">
     {% for f in running %}{{ entry(f) }}{% endfor %}
   </ul>
+  {% if uncarried %}
+  <p style="margin:8px 0 0;color:#9ca3af;font-size:12px">
+    … plus {{ uncarried }} entries in other sectors, not listed.</p>
+  {% endif %}
 
   <p style="margin-top:24px;color:#9ca3af;font-size:12px">
     IntoTheDarkness · {{ now }}</p>
@@ -392,17 +429,24 @@ def render_digest_html(
     new_keys: set[str],
     status: str = "",
     window_days: int = 60,
+    priority: Sequence[str] = ("healthcare",),
+    carry: Sequence[str] = ("healthcare",),
 ) -> str:
     from ..models import utcnow
 
     vendors, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
-    running = [f for f in entries if not (f.item and f.item.key in new_keys)]
+    running, uncarried = _carried(
+        [f for f in entries if not (f.item and f.item.key in new_keys)], carry
+    )
     return _DIGEST_HTML.render(
         total=len(entries),
         vendors=_newest_first(vendors),
-        new=_newest_first(new),
+        new=_priority_first(new, priority),
         running=_newest_first(running),
+        uncarried=uncarried,
+        carried=", ".join(carry) if carry else "all sectors",
+        priority_label=", ".join(priority),
         # The entry is already-rendered HTML. Without Markup, autoescape on
         # the outer template turns every <li> into literal text in the mail.
         entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for, sector=_sector_of(f))),

@@ -303,6 +303,38 @@ class Repository:
                 finding.item.url = floor
         return list(by_victim.values())
 
+    def observations_since(
+        self, days: int, skip_targets: set[str] | None = None
+    ) -> list[Finding]:
+        """Everything seen in the window, reported or not, as findings.
+
+        The findings table holds only what the rules let through at the time.
+        A vendor added to the watchlist today may have been listed last week
+        in a sector the rules then ignored; this is where it still exists.
+        """
+        since = utcnow() - timedelta(days=days)
+        with self.db.session() as s:
+            rows = s.scalars(
+                select(ObservationRow).where(ObservationRow.first_seen >= since)
+            ).all()
+        out: list[Finding] = []
+        for row in rows:
+            if skip_targets and row.target in skip_targets:
+                continue
+            if not row.payload:
+                continue
+            try:
+                item = Item.model_validate(row.payload)
+            except Exception:  # a payload written by an older schema
+                continue
+            seen = row.first_seen
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=UTC)
+            out.append(
+                Finding(kind=FindingKind.NEW, target=row.target, item=item, created_at=seen)
+            )
+        return out
+
     def attach_findings_to_case(self, finding_ids: Sequence[int], case_id: int) -> int:
         with self.db.session() as s:
             rows = s.scalars(select(FindingRow).where(FindingRow.id.in_(finding_ids))).all()

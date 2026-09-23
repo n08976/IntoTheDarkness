@@ -76,13 +76,13 @@ def test_running_list_is_one_flat_list_newest_first_with_sector_inline():
         f("b", "Mid Widgets", "manufacturing", "2026-08-15"),
         f("c", "Newest Hospital", "healthcare", "2026-09-10"),
     ]
-    text = render_digest_text(entries, set())
+    text = render_digest_text(entries, set(), carry=())      # every sector in the running list
     body = text.split("DISCOVERED IN THE LAST", 1)[1]
     assert body.index("Newest Hospital") < body.index("Mid Widgets") < body.index("Older Clinic")
     assert "-- healthcare" not in text                     # no sector headings
     assert "[manufacturing] Mid Widgets" in text           # sector inline instead
 
-    html = render_digest_html(entries, set())
+    html = render_digest_html(entries, set(), carry=())
     assert html.index("Newest Hospital") < html.index("Mid Widgets") < html.index("Older Clinic")
 
 
@@ -109,3 +109,28 @@ def test_vendor_victims_lead_the_report_and_are_not_repeated_below():
     html = render_digest_html(entries, {"a", "b"})
     assert html.index("Vendor victims") < html.index("New since last report")
     assert html.count("Beckman Coulter, Inc") == 1
+
+
+def test_new_section_leads_with_priority_sectors_and_running_list_carries_only_them():
+    from datetime import UTC, datetime, timedelta
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    def f(key, title, sector, age):
+        when = datetime(2026, 9, 23, tzinfo=UTC) - timedelta(days=age)
+        item = Item(key=key, target="t", title=title, fields={"sector": sector})
+        return Finding(kind=FindingKind.NEW, target="t", created_at=when, item=item)
+
+    entries = [f("a", "Acme Steel", "manufacturing", 0), f("b", "Mercy Clinic", "healthcare", 1),
+               f("c", "Old Mill", "manufacturing", 10), f("d", "Old Hospital", "healthcare", 12)]
+    text = render_digest_text(entries, {"a", "b"})
+    new = text.split("NEW SINCE LAST REPORT", 1)[1].split("DISCOVERED IN", 1)[0]
+    assert new.index("Mercy Clinic") < new.index("Acme Steel")   # priority first though older
+    running = text.split("DISCOVERED IN", 1)[1]
+    assert "Old Hospital" in running and "Old Mill" not in running       # carried sectors only
+    assert "plus 1 entries in other sectors" in running
+    html = render_digest_html(entries, {"a", "b"})
+    assert html.index("Mercy Clinic") < html.index("Acme Steel") and "Old Mill" not in html
+    everything = render_digest_text(entries, {"a", "b"}, carry=())
+    assert "Old Mill" in everything.split("DISCOVERED IN", 1)[1]

@@ -517,3 +517,29 @@ def test_report_flags_vendor_victims_recorded_before_the_list_existed(settings, 
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+def test_report_includes_vendor_listings_the_rules_never_reported(settings, repo, tmp_path):
+    # A manufacturing vendor listed before it was on the watchlist was never a
+    # finding (ignored by the rules) -- it exists only as an observation.
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        ignore_all = RuleSet(default_action="ignore", rules=[])
+        p = pipeline(settings, repo, ignore_all)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox"])])
+        FEED[:] = [("a", "Alpha"), ("b", "Konica Minolta Bulgaria")]
+        p.run([target(channels=["inbox"])])                       # observed, ignored, unreported
+        assert repo.recent_findings() == []
+
+        _with_watchlist(settings, tmp_path, "Konica Minolta\n")
+        p2 = pipeline(settings, repo, RuleSet(rules=[]))            # anything new is reported
+        FEED[:] = [("a", "Alpha"), ("b", "Konica Minolta Bulgaria"), ("c", "Gamma")]
+        p2.run([target(channels=["inbox"])])
+        text = InboxNotifier.sent[-1].text
+        assert "VENDOR VICTIMS" in text and "Konica Minolta Bulgaria" in text
+        assert text.index("Konica Minolta Bulgaria") < text.index("NEW SINCE LAST REPORT")
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []

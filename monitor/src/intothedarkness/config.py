@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     # links. Each recipient gets the form its gateway accepts. "*" means all.
     defang_recipients: list[str] = Field(default_factory=list)
 
+    # Every sector is reported; these lead the "new" section and are the only
+    # ones carried in the running list (with the rest counted), because at
+    # 30-180 victims a day across all sectors a full 60-day list is not an
+    # email anyone reads. Empty digest_sectors means carry everything.
+    priority_sectors: list[str] = Field(default_factory=lambda: ["healthcare"])
+    digest_sectors: list[str] = Field(default_factory=lambda: ["healthcare"])
+
     # Priority watchlist: vendor names whose appearance anywhere is urgent.
     # The list is edited in the git repository and pushed; this box has no
     # checkout of it, so the published file is fetched each run into

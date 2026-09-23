@@ -237,3 +237,22 @@ def test_findings_without_provenance_never_match_a_source_condition():
     rules = RuleSet(rules=[Rule(name="r", sector_sources=["upstream"], channels=["email"])])
     bare = Finding(kind=FindingKind.NEW, target="t", message="no item")
     assert rules.apply([bare])[0].channels == []
+
+
+def test_healthcare_rules_stop_so_a_catch_all_cannot_rename_them():
+    from intothedarkness.alerting import Rule, RuleSet
+    from intothedarkness.models import Finding, FindingKind, Item, Severity
+
+    rules = RuleSet(default_action="ignore", rules=[
+        Rule(name="healthcare-confirmed", sectors=["healthcare"], severity=Severity.CRITICAL,
+             channels=["resend"], stop=True),
+        Rule(name="all-sectors", severity=Severity.LOW, channels=["resend"]),
+    ])
+    hc = Finding(kind=FindingKind.NEW, target="t",
+                 item=Item(key="1", target="t", title="Mercy", fields={"sector": "healthcare"}))
+    other = Finding(kind=FindingKind.NEW, target="t",
+                    item=Item(key="2", target="t", title="Acme",
+                              fields={"sector": "manufacturing"}))
+    kept = rules.apply([hc, other])
+    assert [(f.rule, f.severity) for f in kept] == [
+        ("healthcare-confirmed", Severity.CRITICAL), ("all-sectors", Severity.LOW)]
