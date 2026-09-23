@@ -127,6 +127,15 @@ def _links(finding: Finding) -> list[str]:
     return lines
 
 
+def _split_vendor_victims(
+    entries: Sequence[Finding],
+) -> tuple[list[Finding], list[Finding]]:
+    """Watchlist matches first, everything else second."""
+    hit = [f for f in entries if f.item and f.item.fields.get("watchlist")]
+    rest = [f for f in entries if not (f.item and f.item.fields.get("watchlist"))]
+    return hit, rest
+
+
 def _newest_first(findings: Sequence[Finding]) -> list[Finding]:
     """Newest first by the displayed date; see dates.sort_key for why."""
     return sorted(findings, key=sort_key, reverse=True)
@@ -144,17 +153,37 @@ def render_digest_text(
     window_days: int = 60,
 ) -> str:
     """The full running list, with anything new since the last report first."""
+    vendors, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running = [f for f in entries if not (f.item and f.item.key in new_keys)]
 
     lines = [
         f"{len(new)} new since the last report"
         + (f" across {target_label}" if target_label else "")
-        + f"; {len(running)} more in the last {window_days} days.",
+        + f"; {len(running)} more in the last {window_days} days."
+        + (f" {len(vendors)} VENDOR VICTIM(S)." if vendors else ""),
         "",
     ]
     if status:
         lines += [status, ""]
+
+    # Priority above everything else: a vendor you depend on, named on a
+    # leak site. Listed once, here, and not again below.
+    if vendors:
+        lines += [
+            "!!  VENDOR VICTIMS — PRIORITY WATCHLIST (" + str(len(vendors)) + ")",
+            "!!" + "=" * 44,
+            "",
+        ]
+        for f in _newest_first(vendors):
+            vendor = f.item.fields.get("watchlist") if f.item else ""
+            group = f.item.fields.get("group") if f.item else ""
+            lines.append(
+                f"  !! {f.item.summary() if f.item else f.message}"
+                f"   [vendor: {vendor}]" + (f"  by {group}" if group else "")
+            )
+            lines += _links(f)
+        lines.append("")
 
     # One flat list per section, newest first. Sector is printed on each entry
     # rather than used as a heading: headings would split the timeline, and the
@@ -282,6 +311,20 @@ _DIGEST_HTML = _env.from_string(
   <p style="margin:0 0 16px;color:#9ca3af;font-size:12px">{{ status }}</p>
   {% endif %}
 
+  {% if vendors %}
+  <div style="border:3px solid #b45309;border-radius:6px;padding:2px 16px 12px;
+              margin-bottom:24px;background:#fffbeb">
+    <h2 style="font-size:16px;margin:12px 0 4px;color:#92400e;text-transform:uppercase;
+               letter-spacing:.04em">
+      &#9888; Vendor victims — priority watchlist ({{ vendors|length }})</h2>
+    <p style="margin:0 0 8px;color:#92400e;font-size:12px">
+      Vendors you depend on, named on a leak site. Listed here and nowhere else in this report.</p>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      {% for f in vendors %}{{ entry(f) }}{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if new %}
   <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
               margin-bottom:24px;background:#fef2f2">
@@ -312,6 +355,11 @@ _DIGEST_HTML = _env.from_string(
 _ENTRY = _env.from_string(
     """<li style="margin-bottom:6px">
   <strong>{{ f.item.summary() if f.item else f.message }}</strong>
+  {%- if f.item and f.item.fields.get('watchlist') %}
+  <span style="font-size:11px;color:#92400e;font-weight:600;margin-left:6px">
+    vendor: {{ f.item.fields['watchlist'] }}
+    {%- if f.item.fields.get('group') %} · by {{ f.item.fields['group'] }}{% endif %}</span>
+  {%- endif %}
   <span style="font-size:11px;color:#6b7280;text-transform:uppercase;
                letter-spacing:.04em;margin-left:6px">{{ sector }}</span>
   <div style="font-size:12px;color:#6b7280;margin-top:1px">
@@ -347,10 +395,12 @@ def render_digest_html(
 ) -> str:
     from ..models import utcnow
 
+    vendors, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running = [f for f in entries if not (f.item and f.item.key in new_keys)]
     return _DIGEST_HTML.render(
         total=len(entries),
+        vendors=_newest_first(vendors),
         new=_newest_first(new),
         running=_newest_first(running),
         # The entry is already-rendered HTML. Without Markup, autoescape on

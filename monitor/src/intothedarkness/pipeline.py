@@ -232,6 +232,7 @@ class Pipeline:
         tags_by_target = {t.name: t.tags for t in targets}
         # Where each target lives, for entries stored before it had an address.
         self._floors = {t.name: t.base_url for t in targets if t.base_url}
+        self._tags = tags_by_target
 
         with Fetcher(self.settings) as fetcher:
             for target in targets:
@@ -328,6 +329,22 @@ class Pipeline:
             matched.append(f)
         return matched
 
+    def _flag_watchlist(self, entries: Sequence[Finding]) -> None:
+        vendors = self._vendors()
+        if not vendors:
+            return
+        skip = set(self.settings.watchlist_skip_tags)
+        tags = getattr(self, "_tags", {})
+        for f in entries:
+            if f.item is None or f.item.fields.get("watchlist"):
+                continue
+            if skip & set(tags.get(f.target, [])):
+                continue
+            for vendor in vendors:
+                if vendor.matches(f.item.title):
+                    f.item.fields["watchlist"] = vendor.name
+                    break
+
     def _send_urgent(
         self, findings: Sequence[Finding], report: RunReport, dry_run: bool = False
     ) -> None:
@@ -411,6 +428,9 @@ class Pipeline:
         entries = self.repo.discoveries_since(
             self.settings.digest_days, floors=getattr(self, "_floors", None)
         )
+        # Entries recorded before the watchlist existed, or before a vendor was
+        # added to it, still belong at the top of the report.
+        self._flag_watchlist(entries)
         new_keys = {f.item.key for f in group if f.item}
         # A finding saved moments ago is already in the window; anything the
         # window missed still belongs in the report, so union rather than trust.

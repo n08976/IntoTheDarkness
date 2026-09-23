@@ -46,3 +46,13 @@ def db(settings) -> Database:
 @pytest.fixture
 def repo(db) -> Repository:
     return Repository(db)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_watchlist(settings, tmp_path):
+    # Settings() defaults to the real vendor list and the published URL. A
+    # test that touched either would load hundreds of real vendors, fetch from
+    # GitHub, and route matches to a channel that is not configured.
+    settings.watchlist_file = tmp_path / "vendors.txt"
+    settings.watchlist_url = ""
+    return settings

@@ -493,3 +493,27 @@ def test_news_sources_never_feed_the_watchlist(settings, repo, tmp_path):
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+def test_report_flags_vendor_victims_recorded_before_the_list_existed(settings, repo, tmp_path):
+    # A vendor listed last week and added to the watchlist today still leads
+    # the next report.
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo)                        # no watchlist yet
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox"])])
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter, Inc")]
+        p.run([target(channels=["inbox"])])                 # recorded as an ordinary finding
+        assert "VENDOR VICTIMS" not in InboxNotifier.sent[-1].text
+
+        _with_watchlist(settings, tmp_path, "Beckman Coulter\n")
+        p2 = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter, Inc"), ("c", "Gamma")]
+        p2.run([target(channels=["inbox"])])
+        text = InboxNotifier.sent[-1].text
+        assert "VENDOR VICTIMS" in text and "[vendor: Beckman Coulter]" in text
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []

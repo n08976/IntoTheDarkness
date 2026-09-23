@@ -84,3 +84,28 @@ def test_running_list_is_one_flat_list_newest_first_with_sector_inline():
 
     html = render_digest_html(entries, set())
     assert html.index("Newest Hospital") < html.index("Mid Widgets") < html.index("Older Clinic")
+
+
+def test_vendor_victims_lead_the_report_and_are_not_repeated_below():
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    def f(key, title, **fields):
+        when = datetime(2026, 9, 23, tzinfo=UTC)
+        item = Item(key=key, target="t", title=title, fields=fields)
+        return Finding(kind=FindingKind.NEW, target="t", created_at=when, item=item)
+
+    entries = [
+        f("a", "Textile City", sector="manufacturing"),
+        f("b", "Beckman Coulter, Inc", sector="healthcare",
+          watchlist="Beckman Coulter", group="metaencryptor"),
+    ]
+    text = render_digest_text(entries, {"a", "b"})
+    assert text.index("VENDOR VICTIMS") < text.index("NEW SINCE LAST REPORT")
+    assert text.count("Beckman Coulter, Inc") == 1                 # once, at the top
+    assert "[vendor: Beckman Coulter]" in text and "by metaencryptor" in text
+    html = render_digest_html(entries, {"a", "b"})
+    assert html.index("Vendor victims") < html.index("New since last report")
+    assert html.count("Beckman Coulter, Inc") == 1
