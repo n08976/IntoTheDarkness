@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urljoin, urlparse
 
+from . import watchlist
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
 from .enrich import SectorClassifier, SectorIndex
@@ -41,6 +42,7 @@ class RunReport:
     errors: dict[str, str] = field(default_factory=dict)
     suppressed: int = 0
     notified: dict[str, int] = field(default_factory=dict)
+    watchlist: list[Finding] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -52,6 +54,8 @@ class RunReport:
             f"{self.items_scraped} item(s)",
             f"{len(self.findings)} finding(s)",
         ]
+        if self.watchlist:
+            parts.append(f"{len(self.watchlist)} WATCHLIST")
         if self.suppressed:
             parts.append(f"{self.suppressed} suppressed")
         if self.targets_not_due:
@@ -214,7 +218,16 @@ class Pipeline:
         notify: bool = True,
         preview: bool = False,
         digest: bool = False,
+        watchlist_only: bool = False,
     ) -> RunReport:
+        """One sweep.
+
+        ``watchlist_only`` scrapes everything but persists nothing and alerts
+        only on watchlist matches. It runs between the scheduled reports, so
+        a vendor is noticed within the hour; leaving observations unwritten
+        means the next scheduled sweep still sees everything as new and
+        reports it as it would have anyway.
+        """
         report = RunReport()
         tags_by_target = {t.name: t.tags for t in targets}
         # Where each target lives, for entries stored before it had an address.
@@ -232,7 +245,9 @@ class Pipeline:
 
                 report.targets_run += 1
                 try:
-                    findings, item_count = self.run_target(target, fetcher, force, dry_run)
+                    findings, item_count = self.run_target(
+                        target, fetcher, force, dry_run or watchlist_only
+                    )
                 except Exception as exc:
                     report.errors[target.name] = str(exc)
                     continue
@@ -240,22 +255,35 @@ class Pipeline:
                 report.findings.extend(findings)
                 report.items_scraped += item_count
 
-        report.findings = self.rules.apply(report.findings, tags_by_target)
+        # Watchlist matches bypass the sector rules: a vendor on any leak site,
+        # in any sector, is a third-party exposure. They are found before the
+        # rules run, because default_action: ignore would drop them.
+        urgent = self._watchlist_matches(report.findings, tags_by_target)
+        report.watchlist = urgent
+        if watchlist_only:
+            report.findings = list(urgent)
+        else:
+            rest = [f for f in report.findings if f not in urgent]
+            report.findings = self.rules.apply(rest, tags_by_target) + list(urgent)
 
         if not report.findings:
             if digest and notify and not dry_run:
                 self._send_daily_digest(targets, report)
             return report
 
-        if not dry_run:
+        if not dry_run and not watchlist_only:
             self.repo.save_findings(report.findings)
 
         if notify:
             deliverable = (
                 report.findings if dry_run else self._drop_recently_alerted(report)
             )
-            if deliverable:
-                self._dispatch(deliverable, report, dry_run=dry_run, preview=preview)
+            hot = [f for f in deliverable if f in urgent]
+            if hot:
+                self._send_urgent(hot, report, dry_run=dry_run)
+            regular = [f for f in deliverable if f not in urgent]
+            if regular:
+                self._dispatch(regular, report, dry_run=dry_run, preview=preview)
             elif digest and not dry_run:
                 # Everything new was inside its cooldown. The daily report still
                 # goes, or a quiet morning is indistinguishable from a dead cron.
@@ -263,14 +291,90 @@ class Pipeline:
 
         return report
 
+    # ------------------------------------------------------------------ watchlist
+
+    def _vendors(self) -> list[watchlist.Vendor]:
+        if not hasattr(self, "_vendor_cache"):
+            s = self.settings
+
+            def fetch(url: str) -> str:
+                with Fetcher(s) as f:
+                    return f.request("GET", url, {}, None, None, network="direct").text
+
+            self._vendor_cache = watchlist.refresh(s.watchlist_file, s.watchlist_url, fetch)
+        return self._vendor_cache
+
+    def _watchlist_matches(
+        self, findings: Sequence[Finding], tags_by_target: dict[str, list[str]]
+    ) -> list[Finding]:
+        vendors = self._vendors()
+        if not vendors:
+            return []
+        skip = set(self.settings.watchlist_skip_tags)
+        eligible = [
+            f for f in findings
+            if f.kind in (FindingKind.NEW, FindingKind.CHANGED, FindingKind.BASELINE)
+            and not (skip & set(tags_by_target.get(f.target, [])))
+        ]
+        hits = watchlist.find_matches(vendors, eligible)
+        matched: list[Finding] = []
+        for i, vendor in hits.items():
+            f = eligible[i]
+            f.rule = f"watchlist:{vendor.name}"
+            f.severity = Severity.CRITICAL
+            f.channels = list(self.settings.watchlist_channels)
+            if f.item is not None:
+                f.item.fields["watchlist"] = vendor.name
+            matched.append(f)
+        return matched
+
+    def _send_urgent(
+        self, findings: Sequence[Finding], report: RunReport, dry_run: bool = False
+    ) -> None:
+        """One mail per channel, sent now, naming the vendors in the subject."""
+        vendors = sorted({str(f.item.fields.get("watchlist")) for f in findings if f.item})
+        subject = f"[URGENT] Vendor on leak site: {', '.join(vendors)}"
+        header = (
+            "PRIORITY WATCHLIST MATCH\n"
+            f"{len(findings)} listing(s) name a vendor on your watchlist. "
+            "Sent immediately, outside the scheduled reports.\n\n"
+        )
+        message = Message(
+            subject=subject,
+            text=header + render_text(findings),
+            html=f"<p><strong>Priority watchlist match.</strong> {len(findings)} listing(s) "
+                 f"name a vendor on your watchlist.</p>" + render_html(findings),
+            findings=findings,
+        )
+        for channel in self.settings.watchlist_channels:
+            if dry_run and channel not in ("console", "preview"):
+                channel = "console"
+            try:
+                notifier = get_notifier(channel, self.settings)
+                ok, why = notifier.available()
+                if not ok:
+                    raise RuntimeError(why)
+                notifier.send(message)
+            except Exception as exc:
+                log.error("urgent channel %s failed: %s", channel, exc)
+                report.errors[f"notify:{channel}"] = str(exc)
+                continue
+            report.notified[channel] = report.notified.get(channel, 0) + len(findings)
+            if not dry_run:
+                for f in findings:
+                    self.repo.record_alert(f.dedupe_key(), channel, ok=True)
+
     # ---------------------------------------------------------------- notification
 
     def _drop_recently_alerted(self, report: RunReport) -> list[Finding]:
         keep: list[Finding] = []
         for finding in report.findings:
-            if self.repo.recently_alerted(
-                finding.dedupe_key(), self.settings.alert_cooldown_minutes
-            ):
+            cooldown = (
+                self.settings.watchlist_cooldown_minutes
+                if (finding.rule or "").startswith("watchlist:")
+                else self.settings.alert_cooldown_minutes
+            )
+            if self.repo.recently_alerted(finding.dedupe_key(), cooldown):
                 report.suppressed += 1
                 continue
             keep.append(finding)

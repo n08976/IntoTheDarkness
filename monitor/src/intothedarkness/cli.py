@@ -70,6 +70,41 @@ import_app = typer.Typer(no_args_is_help=True, help="Import target lists from ot
 app.add_typer(sector_app, name="sector")
 bm_app = typer.Typer(no_args_is_help=True, help="The curated bookmarks list.")
 app.add_typer(import_app, name="import")
+wl_app = typer.Typer(no_args_is_help=True, help="The priority vendor watchlist.")
+app.add_typer(wl_app, name="watchlist")
+
+
+@wl_app.command("show")
+def watchlist_show(refresh: bool = typer.Option(False, "--refresh", help="Fetch first.")) -> None:
+    """How many vendors are loaded, and which names match whole names only."""
+    from . import watchlist as wl
+    from .scrapers import Fetcher
+
+    settings = get_settings()
+    if refresh:
+        def fetch(url: str) -> str:
+            with Fetcher(settings) as f:
+                return f.request("GET", url, {}, None, None, network="direct").text
+        vendors = wl.refresh(settings.watchlist_file, settings.watchlist_url, fetch)
+    else:
+        vendors = wl.load(settings.watchlist_file)
+    single = [v.name for v in vendors if all(len(f) == 1 for f in v.forms)]
+    console.print(f"{len(vendors)} vendors from {settings.watchlist_file}")
+    console.print(f"[dim]{len(single)} single-word names match a victim's whole name only[/dim]")
+
+
+@wl_app.command("test")
+def watchlist_test(names: list[str] = typer.Argument(..., help="Victim names to try.")) -> None:
+    """Would these victim names trigger an alert?"""
+    from . import watchlist as wl
+
+    vendors = wl.load(get_settings().watchlist_file)
+    for name in names:
+        hit = next((v.name for v in vendors if v.matches(name)), None)
+        mark = f"[green]MATCH[/green] {escape(hit)}" if hit else "[dim]no match[/dim]"
+        console.print(f"{escape(name):44} {mark}")
+
+
 disco_app = typer.Typer(no_args_is_help=True, help="Find new sites via onion search engines.")
 app.add_typer(bm_app, name="bookmarks")
 app.add_typer(disco_app, name="discover")
@@ -172,6 +207,10 @@ def run(
         help="Send the full report to inbox channels even if nothing is new "
              "(the daily proof of life).",
     ),
+    watchlist_only: bool = typer.Option(
+        False, "--watchlist-only",
+        help="Scrape everything, persist nothing, alert only on watchlist vendors.",
+    ),
     targets_file: Path = typer.Option(None, "--targets", help="Path to targets YAML."),
     rules_file: Path = typer.Option(None, "--rules", help="Path to rules YAML."),
 ) -> None:
@@ -198,6 +237,7 @@ def run(
         notify=not no_notify,
         preview=preview,
         digest=digest,
+        watchlist_only=watchlist_only,
     )
 
     if preview:

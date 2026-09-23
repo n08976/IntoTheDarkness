@@ -15,7 +15,10 @@
 # EDT/EST on its own and keeps 6am at 6am all year. Change the hours with
 # ITD_RUN_HOURS in the script, not by editing this line.
 #
-# Silence means it ran and found nothing. Tor trouble, a failed sweep or a
+# Cron fires every 15 minutes: the scheduled sweeps run at :00 of their hours,
+# and in between the script runs a watchlist-only sweep every
+# ITD_WATCHLIST_INTERVAL_MINUTES (from .env, default 60) that alerts only on
+# priority vendors. Silence means it ran and found nothing. Tor trouble, a failed sweep or a
 # self-healed Tor all send mail — see deploy/ops_notify.py.
 # ===========================================================================
-0 * * * * /home/user/.claude/projects/ai-intothedarkness/deploy/monitor-run.sh --scheduled
+*/15 * * * * /home/user/.claude/projects/ai-intothedarkness/deploy/monitor-run.sh --scheduled

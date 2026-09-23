@@ -413,3 +413,83 @@ def test_without_the_digest_flag_a_quiet_run_sends_nothing(settings, repo):
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+def _with_watchlist(settings, tmp_path, names):
+    settings.watchlist_file = tmp_path / "vendors.txt"
+    settings.watchlist_file.write_text(names)
+    settings.watchlist_url = ""                       # no fetch in tests
+    settings.watchlist_channels = ["inbox"]
+    return settings
+
+
+def test_watchlist_match_bypasses_ignore_rules_and_goes_out_urgent(settings, repo, tmp_path):
+    # default_action: ignore drops everything that is not healthcare; a vendor
+    # on a leak site must get through anyway, at once, marked critical.
+    _with_watchlist(settings, tmp_path, "Beckman Coulter\nAbbott\n")
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        rules = RuleSet(default_action="ignore", rules=[])
+        p = pipeline(settings, repo, rules)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=[])])
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter, Inc"), ("c", "Textile City")]
+        report = p.run([target(channels=[])])
+
+        assert [f.item.title for f in report.watchlist] == ["Beckman Coulter, Inc"]
+        assert report.findings[0].severity is Severity.CRITICAL
+        assert report.findings[0].rule == "watchlist:Beckman Coulter"
+        assert len(InboxNotifier.sent) == 1
+        assert InboxNotifier.sent[0].subject == "[URGENT] Vendor on leak site: Beckman Coulter"
+        assert "Beckman Coulter" in InboxNotifier.sent[0].text
+        assert "Textile City" not in InboxNotifier.sent[0].text     # still ignored
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
+
+
+def test_watchlist_only_sweep_persists_nothing_and_respects_cooldown(settings, repo, tmp_path):
+    _with_watchlist(settings, tmp_path, "Beckman Coulter\n")
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo, RuleSet(default_action="ignore", rules=[]))
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=[])])                                   # seed
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter")]
+
+        p.run([target(channels=[])], watchlist_only=True)
+        assert len(InboxNotifier.sent) == 1                            # alerted now
+        assert repo.recent_findings() == []                            # nothing saved
+        assert repo.known_items("t").keys() == {"a"}                   # "b" not seeded
+
+        again = p.run([target(channels=[])], watchlist_only=True)
+        assert len(InboxNotifier.sent) == 1                            # cooldown held
+        assert again.suppressed == 1
+
+        # The regular sweep still sees it as new and records it for the report.
+        regular = p.run([target(channels=[])])
+        assert [f.item.key for f in regular.findings] == ["b"]
+        assert len(repo.recent_findings()) == 1
+        assert len(InboxNotifier.sent) == 1                            # not mailed twice
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
+
+
+def test_news_sources_never_feed_the_watchlist(settings, repo, tmp_path):
+    _with_watchlist(settings, tmp_path, "Microsoft\n")
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    try:
+        p = pipeline(settings, repo, RuleSet(default_action="ignore", rules=[]))
+        news = target(name="news-x", tags=["news"], channels=[])
+        FEED[:] = [("a", "Alpha")]
+        p.run([news])
+        FEED[:] = [("a", "Alpha"), ("b", "Microsoft")]
+        report = p.run([news])
+        assert report.watchlist == [] and InboxNotifier.sent == []
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []

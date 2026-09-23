@@ -105,6 +105,26 @@ class Settings(BaseSettings):
     # links. Each recipient gets the form its gateway accepts. "*" means all.
     defang_recipients: list[str] = Field(default_factory=list)
 
+    # Priority watchlist: vendor names whose appearance anywhere is urgent.
+    # The list is edited in the git repository and pushed; this box has no
+    # checkout of it, so the published file is fetched each run into
+    # watchlist_file, which also serves as the cache when the fetch fails.
+    watchlist_file: Path = PROJECT_ROOT / "watchlist" / "vendors.txt"
+    watchlist_url: str = (
+        "https://raw.githubusercontent.com/n08976/IntoTheDarkness/main/monitor/watchlist/vendors.txt"
+    )
+    watchlist_channels: list[str] = Field(default_factory=lambda: ["resend"])
+    # A vendor match re-alerts no sooner than this; the hourly watchlist
+    # sweeps would otherwise repeat the same alert until the regular sweep
+    # persists the finding.
+    watchlist_cooldown_minutes: int = 1440
+    # How often the wrapper runs a watchlist-only sweep between the scheduled
+    # reports. Read by deploy/monitor-run.sh; cron fires every 15 minutes.
+    watchlist_interval_minutes: int = 60
+    # Targets carrying any of these tags never feed the watchlist: a headline
+    # that starts with "Microsoft" is not Microsoft on a leak site.
+    watchlist_skip_tags: list[str] = Field(default_factory=lambda: ["news"])
+
     # Generic webhook sink
     webhook_url: str = ""
 

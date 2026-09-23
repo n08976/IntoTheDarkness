@@ -37,18 +37,34 @@ log() { printf '%s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"${LOG}"; }
 # rules out a systemd timer with its own timezone. So cron fires this every
 # hour and the schedule lives here instead, where America/New_York follows
 # EDT and EST on its own and 6am stays 6am through both.
+# Between scheduled reports, a watchlist-only sweep every N minutes: scrape,
+# persist nothing, alert only on watchlist vendors. Read from .env so the
+# interval is configured in one place with everything else.
+WATCHLIST_INTERVAL="${ITD_WATCHLIST_INTERVAL_MINUTES:-$(grep -E '^ITD_WATCHLIST_INTERVAL_MINUTES=' "${PROJECT}/.env" 2>/dev/null | cut -d= -f2 | tr -d '\r ')}"
+WATCHLIST_INTERVAL="${WATCHLIST_INTERVAL:-60}"
+WATCHLIST_STAMP="${PROJECT}/data/watchlist.last"
+
 DIGEST=""
+MODE="sweep"
 if [ "${1:-}" = "--scheduled" ]; then
     now="$(TZ="${SCHEDULE_TZ}" date +%H)"
+    minute="$(date +%M)"
     case " ${RUN_HOURS} " in
-        *" ${now} "*) ;;
-        *) exit 0 ;;
+        *" ${now} "*) [ "${minute}" = "00" ] || MODE="watchlist" ;;
+        *) MODE="watchlist" ;;
     esac
+    if [ "${MODE}" = "watchlist" ]; then
+        [ -s "${PROJECT}/watchlist/vendors.txt" ] || exit 0
+        last=$(cat "${WATCHLIST_STAMP}" 2>/dev/null || echo 0)
+        [ $(( $(date +%s) - last )) -ge $(( WATCHLIST_INTERVAL * 60 )) ] || exit 0
+    fi
     case " ${DIGEST_HOURS} " in
-        *" ${now} "*) DIGEST="--digest" ;;
+        *" ${now} "*) [ "${MODE}" = "sweep" ] && DIGEST="--digest" ;;
     esac
 elif [ "${1:-}" = "--digest" ]; then
     DIGEST="--digest"
+elif [ "${1:-}" = "--watchlist" ]; then
+    MODE="watchlist"
 fi
 
 notify() {
@@ -69,7 +85,7 @@ if [ "${JITTER}" -gt 0 ]; then
     sleep $((RANDOM % JITTER))
 fi
 
-log "--- sweep starting"
+log "--- ${MODE} starting"
 
 # --- Tor: verify, and rebuild if it cannot route ---------------------------
 healed=0
@@ -122,8 +138,14 @@ fi
 # leak sites carry interval_minutes: 360, which against sweeps four hours
 # apart would silently skip the middle one, so the per-target interval is
 # deliberately not also a scheduler here.
-out="$("${VENV}/itd" run --force ${DIGEST} 2>&1)"
-rc=$?
+if [ "${MODE}" = "watchlist" ]; then
+    out="$("${VENV}/itd" run --force --watchlist-only 2>&1)"
+    rc=$?
+    date +%s > "${WATCHLIST_STAMP}"
+else
+    out="$("${VENV}/itd" run --force ${DIGEST} 2>&1)"
+    rc=$?
+fi
 summary="$(printf '%s\n' "${out}" | grep -E '^[0-9]+ target' | tail -1)"
 printf '%s\n' "${out}" >>"${LOG}"
 
@@ -158,5 +180,5 @@ $(printf '%s\n' "${out}" | tail -25)"
         ;;
 esac
 
-log "--- sweep finished (exit ${rc})"
+log "--- ${MODE} finished (exit ${rc})"
 exit "${rc}"
