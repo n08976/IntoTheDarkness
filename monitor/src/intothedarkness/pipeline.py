@@ -317,6 +317,13 @@ class Pipeline:
             if f.kind in (FindingKind.NEW, FindingKind.CHANGED, FindingKind.BASELINE)
         ]
         hits = watchlist.find_matches(vendors, eligible, self._headline_targets(tags_by_target))
+        # A source that maps names to vendors itself (SEC filers) says so on
+        # the item; take its word rather than re-matching the filer's title.
+        by_name = {v.name: v for v in vendors}
+        for i, f in enumerate(eligible):
+            pre = f.item.fields.get("watchlist") if f.item else None
+            if i not in hits and pre in by_name:
+                hits[i] = by_name[pre]
         matched: list[Finding] = []
         for i, vendor in hits.items():
             f = eligible[i]
@@ -377,7 +384,10 @@ class Pipeline:
     ) -> None:
         """One mail per channel, sent now, naming the vendors in the subject."""
         vendors = sorted({str(f.item.fields.get("watchlist")) for f in findings if f.item})
-        subject = f"[URGENT] Vendor on leak site: {', '.join(vendors)}"
+        if all(f.target.startswith("sec") for f in findings):
+            subject = f"[URGENT] Vendor 8-K cyber filing: {', '.join(vendors)}"
+        else:
+            subject = f"[URGENT] Vendor on leak site: {', '.join(vendors)}"
         header = (
             "PRIORITY WATCHLIST MATCH\n"
             f"{len(findings)} listing(s) name a vendor on your watchlist. "

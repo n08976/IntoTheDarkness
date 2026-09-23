@@ -750,11 +750,38 @@ Sources are of four kinds, and each is read the way it can be read:
 | Leak sites | Rhysida, Everest, DragonForce, Daixin | over Tor with meek bridges, victim cards extracted with per-site selectors (`itd targets suggest` derives them from a live fetch) |
 | News | UnderCode | RSS, direct; headlines only feed the watchlist rule above and the healthcare-by-name rule |
 | Anything else | CTIWatch, LAPSUS$ | CTIWatch's site and API are Cloudflare-walled, key or no key, so its public Telegram channel preview is parsed instead; LAPSUS$ publishes statements, not a table, so the page is watched whole for change |
+| Regulatory filings | SEC EDGAR | 8-K filings by watchlist vendors that are SEC filers, kept only when they disclose a cyber incident (see below) |
 
 Sites behind a captcha or a JavaScript wall with no feed, API or channel
 (ShinyHunters, RansomHouse, The Gentlemen) are bookmarked but not scraped:
 nothing short of a browser reads them, and a browser is not something this
 runs unattended. Their victims still arrive through the aggregators.
+
+### SEC 8-K filings by watchlist vendors
+
+Since December 2023 a material cybersecurity incident must be disclosed on
+Form 8-K under **Item 1.05**; companies also describe incidents under Item
+8.01. Vendors on the watchlist are mapped to SEC filers by name against the
+SEC's own ticker list — conservatively: a multi-word name may be a prefix of
+the filer's, a single word must be followed by nothing but corporate form
+(`Abbott` is ABBOTT LABORATORIES; `Dell` is *not* Dell Technologies, which
+belongs on the list in full). Most vendors are private and map to nothing.
+
+Two routes, deduplicated by accession number:
+
+1. Each mapped filer's submissions feed, where 8-K item codes are listed, so
+   Item 1.05 is an exact match.
+2. EDGAR full-text search for incident wording in 8-Ks, kept only for mapped
+   filers **and** only under Items 1.05 or 8.01 — an earnings release (2.02)
+   mentions cybersecurity as a risk factor as a matter of course, and on a
+   real list three of six hits were exactly that.
+
+A hit is a watchlist match like any other: mailed at once as
+`[URGENT] Vendor 8-K cyber filing: <vendor>`, and at the top of every report,
+linking to the filing itself. Settings: `ITD_SEC_USER_AGENT` (EDGAR requires
+a contact), `ITD_SEC_WINDOW_DAYS` (90), `ITD_SEC_REFRESH_MINUTES` (240; the
+ticker list and each filer's feed are cached, so hourly sweeps cost nothing
+between refreshes and stay far inside EDGAR's ten-requests-a-second limit).
 
 **Sector** is resolved in order of strength of evidence, and the provenance is
 kept: the target's own sector, then the source's label (`upstream`), then a
@@ -814,7 +841,7 @@ src/intothedarkness/
   watchlist.py      the vendor list: parsing, name and headline matching
   scrapers/         fetch.py (network profiles, retries, throttle, robots)
                     html.py, json_api.py, dls.py, embedded.py, rss.py,
-                    darkfield.py, ctiwatch.py, suggest.py
+                    darkfield.py, ctiwatch.py, sec.py, suggest.py
   enrich/           ioc.py (indicators), sector.py (labelling), index.py
   importers/        ransomwatch.py (groups.json / posts.json)
   bookmarks/        store.py (style-preserving IO), health.py, discover.py

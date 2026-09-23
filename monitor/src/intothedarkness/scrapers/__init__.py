@@ -2,6 +2,7 @@
 
 from . import ctiwatch as _ctiwatch  # noqa: F401  registers the "ctiwatch" scraper
 from . import darkfield as _darkfield  # noqa: F401  registers the "darkfield" scraper
+from . import sec as _sec  # noqa: F401  registers the "sec" scraper
 from .base import REGISTRY, Scraper, available, get_scraper, register, register_function
 from .dls import DlsScraper, identity_key, normalize_name
 from .embedded import EmbeddedJsonScraper, extract_payloads

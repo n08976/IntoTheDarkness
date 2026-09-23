@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     # rather than when the title *is* the vendor as on a leak site.
     watchlist_headline_tags: list[str] = Field(default_factory=lambda: ["news"])
 
+    # SEC EDGAR: 8-K cyber-incident filings by watchlist vendors. EDGAR
+    # requires a User-Agent naming a contact ("Name email@example.com").
+    sec_user_agent: str = ""
+    sec_window_days: int = 90
+    sec_refresh_minutes: int = 240
+
     # Generic webhook sink
     webhook_url: str = ""
 
