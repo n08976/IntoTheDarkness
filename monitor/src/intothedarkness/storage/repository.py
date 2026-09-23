@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from ..models import Finding, FindingKind, Item, Severity, utcnow
+from ..notify.links import merge_links
 from .db import (
     AlertRow,
     CaseRow,
@@ -257,7 +258,11 @@ class Repository:
         return rows
 
     def discoveries_since(
-        self, days: int, kinds: Sequence[FindingKind] | None = None, limit: int = 5000
+        self,
+        days: int,
+        kinds: Sequence[FindingKind] | None = None,
+        limit: int = 5000,
+        floors: dict[str, str] | None = None,
     ) -> list[Finding]:
         """Everything we reported in a window, one entry per victim.
 
@@ -267,7 +272,10 @@ class Repository:
         we never told you about.
 
         The same victim often appears from several sources within minutes. The
-        earliest sighting wins, so the list reads as when we learned of it.
+        earliest sighting sets the entry's date, so the list reads as when we
+        learned of it -- but every link the later sightings carried is kept.
+        Keeping only the first record once produced an entry with no link at
+        all while two victim dossiers and two articles about it were discarded.
         """
         since = utcnow() - timedelta(days=days)
         rows = self.recent_findings(since=since, limit=limit)
@@ -282,7 +290,17 @@ class Repository:
                 continue
             item = finding.item
             victim = (item.title if item else "").strip().lower() or row.dedupe_key
-            by_victim.setdefault(victim, finding)
+            if victim not in by_victim:
+                by_victim[victim] = finding
+            else:
+                merge_links(by_victim[victim], finding)
+
+        # An entry scraped before its target had a site address on record
+        # still deserves one: the leak site itself is where the reader goes.
+        for finding in by_victim.values():
+            floor = (floors or {}).get(finding.target)
+            if floor and finding.item is not None and not finding.item.url:
+                finding.item.url = floor
         return list(by_victim.values())
 
     def attach_findings_to_case(self, finding_ids: Sequence[int], case_id: int) -> int:

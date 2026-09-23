@@ -108,3 +108,17 @@ def test_run_bookkeeping(repo):
     repo.finish_run(run_id, items=5, findings=2)
     last = repo.last_run("t")
     assert last is not None and last.items == 5 and last.ok
+
+
+def test_discoveries_get_the_targets_site_as_a_floor_link(repo):
+    # Entries scraped before the target carried base_url have no link at all;
+    # the report-time floor points them at the leak site itself.
+    from intothedarkness.models import Finding, FindingKind, Item
+
+    bare = Finding(kind=FindingKind.NEW, target="dls-x",
+                   item=Item(key="k1", target="dls-x", title="Bare Clinic"))
+    linked = Finding(kind=FindingKind.NEW, target="dls-x",
+                     item=Item(key="k2", target="dls-x", title="Linked Clinic", url="http://x.onion/post/2"))
+    repo.save_findings([bare, linked])
+    out = {f.item.title: f.item.url for f in repo.discoveries_since(1, floors={"dls-x": "http://x.onion/"})}
+    assert out == {"Bare Clinic": "http://x.onion/", "Linked Clinic": "http://x.onion/post/2"}

@@ -122,6 +122,8 @@ def _links(finding: Finding) -> list[str]:
     website = item.fields.get("website")
     if website:
         lines.append(f"      website: {website}")
+    for extra in item.fields.get("also") or []:
+        lines.append(f"      also:    {extra['source']}  {extra['url']}")
     return lines
 
 
@@ -315,7 +317,7 @@ _ENTRY = _env.from_string(
   <div style="font-size:12px;color:#6b7280;margin-top:1px">
     <span style="color:#9ca3af">{{ stamp(f).label }}</span> {{ stamp(f).text }}
   </div>
-  {%- if f.item and (f.item.url or f.item.fields.get('website')) %}
+  {%- if f.item and (f.item.url or f.item.fields.get('website') or f.item.fields.get('also')) %}
   <div style="font-size:12px;margin-top:1px">
     {%- if f.item.url %}
     <a href="{{ f.item.url }}" style="color:#b91c1c;text-decoration:none">leak</a>
@@ -327,6 +329,10 @@ _ENTRY = _env.from_string(
     <a href="{{ f.item.fields['website'] }}"
        style="color:#1d4ed8;text-decoration:none">{{ f.item.fields['website'] }}</a>
     {%- endif %}
+    {%- for extra in f.item.fields.get('also') or [] %}
+    <span style="color:#d1d5db"> · </span>
+    <a href="{{ extra.url }}" style="color:#6b7280;text-decoration:none">{{ extra.source }}</a>
+    {%- endfor %}
   </div>
   {%- endif %}
 </li>"""

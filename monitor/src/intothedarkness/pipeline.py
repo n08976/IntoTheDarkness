@@ -217,6 +217,8 @@ class Pipeline:
     ) -> RunReport:
         report = RunReport()
         tags_by_target = {t.name: t.tags for t in targets}
+        # Where each target lives, for entries stored before it had an address.
+        self._floors = {t.name: t.base_url for t in targets if t.base_url}
 
         with Fetcher(self.settings) as fetcher:
             for target in targets:
@@ -302,7 +304,9 @@ class Pipeline:
             )
 
         status = self._status_line(report)
-        entries = self.repo.discoveries_since(self.settings.digest_days)
+        entries = self.repo.discoveries_since(
+            self.settings.digest_days, floors=getattr(self, "_floors", None)
+        )
         new_keys = {f.item.key for f in group if f.item}
         # A finding saved moments ago is already in the window; anything the
         # window missed still belongs in the report, so union rather than trust.
