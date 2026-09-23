@@ -550,22 +550,34 @@ itd sector classify "St Mary Regional Hospital"   # -> healthcare
 itd findings --sector healthcare --kind new
 ```
 
-To alert on one sector only, **the keep-rule must set `stop: true`**:
+To rank one sector above the rest, **the priority rules must set `stop: true`**
+and the catch-all must come last and be scoped to victim sources:
 
 ```yaml
+default_action: ignore
 rules:
-  - name: healthcare-only
-    targets: ["dls-*"]
+  - name: healthcare-confirmed
     sectors: [healthcare]
+    sector_sources: [target, upstream, propagated]
     severity: critical
-    channels: [email]
-    stop: true              # without this, the next rule drops these too
-  - name: ignore-other-sectors
-    targets: ["dls-*"]
-    action: ignore
+    channels: [resend]
+    stop: true              # without this, the catch-all renames these
+  - name: healthcare-inferred
+    sectors: [healthcare]
+    sector_sources: [name, domain]
+    severity: high
+    channels: [resend]
+    stop: true
+  - name: all-sectors
+    targets: ["agg-*", "dls-*"]   # victim sources only: a headline is not a victim
+    kinds: [new, changed, removed, baseline]
+    severity: low
+    channels: [resend]
 ```
 
-`itd targets validate` warns if you get that ordering wrong.
+Severity is only ever raised by a rule, so the catch-all's `low` cannot pull a
+healthcare finding down; `stop` is what keeps it from overwriting the rule
+name and channels. `itd targets validate` warns if you get that ordering wrong.
 
 ## Rules
 
@@ -637,8 +649,133 @@ unencrypted link.
 Then `itd notify-test --channel email` to prove it works before relying on it.
 
 The same finding will not alert twice within `ITD_ALERT_COOLDOWN_MINUTES`
-(default 6 hours). A `changed` finding folds content into its dedupe key, so a
-page that keeps changing keeps alerting; a stable new item alerts once.
+(default 6 hours); a watchlist match uses `ITD_WATCHLIST_COOLDOWN_MINUTES`
+(default 24 hours) instead. A `changed` finding folds content into its dedupe
+key, so a page that keeps changing keeps alerting; a stable new item alerts
+once.
+
+### Links that survive a mail gateway
+
+Some institutional gateways drop any message carrying raw `.onion` URLs and
+pass the same message with the URLs de-fanged. `ITD_DEFANG_RECIPIENTS` names
+the addresses or bare domains whose copy is rewritten as `hxxp://host[.]tld`;
+everyone else gets the links as they are. Each recipient group is one
+delivery, and nobody receives both. The console is never de-fanged.
+
+## Operating schedule
+
+Cron fires `deploy/monitor-run.sh --scheduled` every 15 minutes. The script,
+not cron, decides what that tick does, in `America/New_York`, so the schedule
+follows daylight saving on its own (Ubuntu's cron has no `CRON_TZ`).
+
+| Tick | Weekdays | Weekends | What runs |
+|---|---|---|---|
+| `:00` of a sweep hour | every hour 07:00–22:00 | 07, 11, 15, 19 | **full sweep**: every source, findings recorded, report mailed if there is anything to say |
+| `:00` of the digest hour | 07:00 | 07:00 | full sweep, and the report is mailed **even with nothing new** — proof of life |
+| any other tick | — | — | **watchlist-only sweep** every `ITD_WATCHLIST_INTERVAL_MINUTES` (default 60): every source scraped, nothing persisted, only watchlist vendors alert |
+
+Settings: `ITD_RUN_HOURS_WEEKDAY`, `ITD_RUN_HOURS_WEEKEND` (or `ITD_RUN_HOURS`
+to override both), `ITD_DIGEST_HOURS`, `ITD_WATCHLIST_INTERVAL_MINUTES` (15 is
+the floor, since that is the cron cadence). Each sweep starts after a random
+delay of up to `ITD_JITTER_SECONDS` (default 240) so requests do not land on
+the clock face.
+
+Before every sweep the script tests Tor with a real SOCKS5 CONNECT — not a pid
+check, because a Tor process can be running, listening and bootstrapped and
+still unable to route — and if the circuit is dead, tears Tor down, rebuilds it
+through meek bridges, and mails to say so. A sweep that fails, or a target that
+errors, mails too. Silence means: ran, nothing new.
+
+A watchlist-only sweep persists nothing on purpose. The next full sweep still
+sees everything as new and reports it exactly as it would have; the only effect
+of the extra sweeps is that a vendor is noticed within the hour instead of at
+the next report.
+
+## What is reported, and in what order
+
+Every emailed report has the same shape, top to bottom:
+
+1. **Vendor victims — priority watchlist.** Any victim, in any sector, from any
+   source, whose name matches `watchlist/vendors.txt`. These are also mailed
+   the moment they are found, subject `[URGENT] Vendor on leak site: <name>`,
+   marked critical, outside the report schedule.
+2. **New since the last report** — every sector, with the priority sectors
+   (`ITD_PRIORITY_SECTORS`, default healthcare) listed first, then the rest,
+   newest first within each.
+3. **Discovered in the last 60 days** — the running list, carrying only the
+   sectors in `ITD_DIGEST_SECTORS` (default healthcare) with the rest counted
+   on one line. At 30–180 victims a day across all sectors, a full running list
+   is not an email anyone reads; set it empty to carry everything.
+4. What the sweep managed — targets swept, items read, any target that failed
+   — so an empty report cannot be mistaken for a quiet day when it means the
+   sources were unreachable.
+
+Severity: a watchlist match is **critical**; healthcare confirmed by a source's
+own label or by a second source is **critical**; healthcare inferred from the
+name or domain is **high**; every other sector is **low**. Each entry carries a
+date with its provenance — `published` when the source gave one that parses,
+`as reported` when it gave one that does not (Everest writes "Sep 1", no year,
+and the year is never guessed), `first seen` when it gave none — and is sorted
+by the date shown.
+
+### The watchlist
+
+`watchlist/vendors.txt`, one vendor name per line, edited here and pushed; the
+monitor fetches the published file each run. Matching is case-insensitive and
+ignores punctuation and corporate suffixes (`Inc`, `LLC`, `Ltd`, `GmbH`).
+
+- On a **leak site or aggregator** the victim's name is the whole title. A
+  multi-word vendor may be a prefix of it (`Konica Minolta` finds `Konica
+  Minolta Bulgaria`); a single-word vendor must equal the whole name, because
+  measured against every victim observed `Olympus` as a prefix fired on
+  `Olympus Financial`.
+- In a **news headline** the vendor sits mid-sentence, so it may appear
+  anywhere — but the headline must also carry an incident word (breach,
+  ransomware, leak, attack, exposed, stolen, …), and a single-word vendor must
+  be at least five letters. Measured against 472 headlines: 3 matches.
+- The same rules are applied backwards over everything observed in the window,
+  so a vendor added today surfaces last week's listing tomorrow — including
+  listings the rules ignored at the time, which exist only as observations.
+
+`itd watchlist show` and `itd watchlist test "<name>"` show what is loaded and
+whether a given victim name would fire.
+
+## How the searching works
+
+Sources are of four kinds, and each is read the way it can be read:
+
+| Kind | Examples | How it is read |
+|---|---|---|
+| Clearnet aggregators | ransomware.live, ransomlook, Darkfield | JSON API or RSS feed, direct; their sector and operator labels are trusted as *upstream* facts |
+| Leak sites | Rhysida, Everest, DragonForce, Daixin | over Tor with meek bridges, victim cards extracted with per-site selectors (`itd targets suggest` derives them from a live fetch) |
+| News | UnderCode | RSS, direct; headlines only feed the watchlist rule above and the healthcare-by-name rule |
+| Anything else | CTIWatch, LAPSUS$ | CTIWatch's site and API are Cloudflare-walled, key or no key, so its public Telegram channel preview is parsed instead; LAPSUS$ publishes statements, not a table, so the page is watched whole for change |
+
+Sites behind a captcha or a JavaScript wall with no feed, API or channel
+(ShinyHunters, RansomHouse, The Gentlemen) are bookmarked but not scraped:
+nothing short of a browser reads them, and a browser is not something this
+runs unattended. Their victims still arrive through the aggregators.
+
+**Sector** is resolved in order of strength of evidence, and the provenance is
+kept: the target's own sector, then the source's label (`upstream`), then a
+2,468-victim index built from other sources (`propagated`), then keywords in
+the organisation name (`name`), then keywords in its domain (`domain`), else
+`unknown`. Surrounding text is deliberately *not* consulted: on a leak site it
+describes the stolen data, not the victim's industry. A wrong sector routes an
+alert away silently, which is worse than none.
+
+**One victim, many sightings.** The same victim usually arrives from several
+sources within minutes. The report merges them by normalised name: the
+earliest sighting sets the date, the best link leads (a real page over a bare
+site root over nothing), the other sources' pages ride along, and a missing
+website, operator or country is filled from any later sighting. Leak sites
+with no per-victim link fall back to the site's own address, so an entry is
+never bare.
+
+**Nothing is inferred that a source did not say.** Years are not guessed,
+sectors are not guessed from descriptions, a throttled API is an error rather
+than an empty feed, and a dry run writes nothing — it once wrote observations,
+which folded that day's new victims into the baseline and lost them for good.
 
 ## Investigations
 
@@ -671,18 +808,26 @@ src/intothedarkness/
   config.py         settings from env/.env
   models.py         Target, Item, Finding, Severity
   tor.py            onion validation, log redaction, circuit control
+  tor_manager.py    the bundled Tor: install, bridges, start/stop, health
   loader.py         YAML → Target/Rule/sectors, with useful errors
-  pipeline.py       scrape → diff → enrich → rules → dedupe → notify → record
+  pipeline.py       scrape → diff → enrich → watchlist → rules → dedupe → notify → record
+  watchlist.py      the vendor list: parsing, name and headline matching
   scrapers/         fetch.py (network profiles, retries, throttle, robots)
-                    html.py, json_api.py, dls.py, suggest.py
-  enrich/           ioc.py (indicators), sector.py (industry labelling)
+                    html.py, json_api.py, dls.py, embedded.py, rss.py,
+                    darkfield.py, ctiwatch.py, suggest.py
+  enrich/           ioc.py (indicators), sector.py (labelling), index.py
   importers/        ransomwatch.py (groups.json / posts.json)
   bookmarks/        store.py (style-preserving IO), health.py, discover.py
   discovery/        engines.py (catalogue), search.py (parsing), safety.py
   storage/          db.py, repository.py (diffing), snapshots.py (retention)
   alerting/         rules.py
-  notify/           email.py, webhook.py, console.py, render.py
+  notify/           resend.py, email.py, webhook.py, console.py, preview.py,
+                    render.py, dates.py (provenance), links.py (merging),
+                    defang.py (per-recipient URL rewriting)
   investigations/   case.py
+deploy/             monitor-run.sh (the scheduled sweep), crontab,
+                    ops_notify.py (failure/recovery mail), Dockerfile, torrc
+watchlist/          vendors.txt (priority vendors; edited here, fetched at run time)
 ```
 
 `tests/socks_stub.py` is a minimal in-process SOCKS5 server, so the whole Tor
