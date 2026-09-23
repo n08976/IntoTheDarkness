@@ -294,7 +294,6 @@ IQVIA
 Iron Mountain, Inc.
 Jaeger Medical
 JB Learning
-Jeferson (Internal)
 Johnson Controls
 Johnson Controls
 Johnson Controls
@@ -558,7 +557,6 @@ Teleskope
 Telexy
 Tenable
 Terumo BCT
-Test mxp300
 THD
 The Tri-M Group
 Thermo Fisher Scientific Inc.
