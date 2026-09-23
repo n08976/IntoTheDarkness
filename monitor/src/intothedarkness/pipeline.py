@@ -312,13 +312,11 @@ class Pipeline:
         vendors = self._vendors()
         if not vendors:
             return []
-        skip = set(self.settings.watchlist_skip_tags)
         eligible = [
             f for f in findings
             if f.kind in (FindingKind.NEW, FindingKind.CHANGED, FindingKind.BASELINE)
-            and not (skip & set(tags_by_target.get(f.target, [])))
         ]
-        hits = watchlist.find_matches(vendors, eligible)
+        hits = watchlist.find_matches(vendors, eligible, self._headline_targets(tags_by_target))
         matched: list[Finding] = []
         for i, vendor in hits.items():
             f = eligible[i]
@@ -330,41 +328,39 @@ class Pipeline:
             matched.append(f)
         return matched
 
+    def _headline_targets(self, tags_by_target: dict[str, list[str]]) -> set[str]:
+        marks = set(self.settings.watchlist_headline_tags)
+        return {t for t, tags in tags_by_target.items() if marks & set(tags)}
+
     def _flag_watchlist(self, entries: Sequence[Finding]) -> None:
         vendors = self._vendors()
         if not vendors:
             return
-        skip = set(self.settings.watchlist_skip_tags)
-        tags = getattr(self, "_tags", {})
+        heads = self._headline_targets(getattr(self, "_tags", {}))
         for f in entries:
             if f.item is None or f.item.fields.get("watchlist"):
                 continue
-            if skip & set(tags.get(f.target, [])):
-                continue
-            for vendor in vendors:
-                if vendor.matches(f.item.title):
-                    f.item.fields["watchlist"] = vendor.name
-                    break
+            hit = watchlist.find_matches(vendors, [f], heads).get(0)
+            if hit is not None:
+                f.item.fields["watchlist"] = hit.name
 
     def _add_observed_vendor_victims(self, entries: list[Finding]) -> list[Finding]:
         """Vendor listings the rules never reported, found in raw observations."""
         vendors = self._vendors()
         if not vendors:
             return entries
-        skip = set(self.settings.watchlist_skip_tags)
-        tags = getattr(self, "_tags", {})
-        skip_targets = {t for t, tg in tags.items() if skip & set(tg)}
+        heads = self._headline_targets(getattr(self, "_tags", {}))
         floors = getattr(self, "_floors", None) or {}
         known = {f.item.title.strip().lower() for f in entries if f.item}
         extra: dict[str, Finding] = {}
-        observed = self.repo.observations_since(self.settings.digest_days, skip_targets)
+        observed = self.repo.observations_since(self.settings.digest_days)
         for f in sorted(observed, key=lambda x: x.created_at):
             if f.item is None:
                 continue
             key = f.item.title.strip().lower()
             if key in known:
                 continue
-            vendor = next((v for v in vendors if v.matches(f.item.title)), None)
+            vendor = watchlist.find_matches(vendors, [f], heads).get(0)
             if vendor is None:
                 continue
             f.item.fields["watchlist"] = vendor.name

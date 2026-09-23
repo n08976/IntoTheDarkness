@@ -63,6 +63,43 @@ class Vendor:
         return False
 
 
+# A headline names a vendor incidentally all the time ("Microsoft patches
+# Excel"). One of these words alongside the name is what makes it a match.
+INCIDENT_WORDS = {
+    "breach", "breached", "ransomware", "leak", "leaked", "leaks", "hack", "hacked",
+    "hackers", "attack", "attacked", "cyberattack", "exposed", "exposure", "stolen",
+    "extortion", "compromised", "compromise", "intrusion", "incident", "victim",
+    "victims", "dump", "dumped", "infostealer", "credentials", "claims", "claimed",
+}
+HEADLINE_MIN_WORD = 5   # "Dell", "GE", "Lap" inside a sentence are not a mention
+
+
+def _contains(seq: tuple[str, ...], sub: tuple[str, ...]) -> bool:
+    n = len(sub)
+    return n > 0 and any(seq[i : i + n] == sub for i in range(len(seq) - n + 1))
+
+
+def mentioned_in(vendor: Vendor, headline: str) -> bool:
+    """A headline names the vendor and is about an incident.
+
+    Multi-word names may appear anywhere in the sentence; a single word must
+    be at least HEADLINE_MIN_WORD letters, or common short names would fire
+    on half the news. Corporate suffixes are stripped from the vendor only:
+    a headline keeps its words.
+    """
+    tokens = tuple(_TOKEN.findall(headline.lower().replace("&", " and ")))
+    if not tokens or not (set(tokens) & INCIDENT_WORDS):
+        return False
+    for form in vendor.forms:
+        if not form:
+            continue
+        if len(form) == 1 and len(form[0]) < HEADLINE_MIN_WORD:
+            continue
+        if _contains(tokens, form):
+            return True
+    return False
+
+
 def parse(text: str) -> list[Vendor]:
     """One vendor per line; duplicates collapse; parentheticals become aliases.
 
@@ -108,13 +145,24 @@ def refresh(path: Path, url: str, fetch) -> list[Vendor]:  # noqa: ANN001 - call
     return load(path)
 
 
-def find_matches(vendors: list[Vendor], findings: list[Finding]) -> dict[int, Vendor]:
-    """index of finding -> the vendor it names."""
+def find_matches(
+    vendors: list[Vendor],
+    findings: list[Finding],
+    headline_targets: set[str] | None = None,
+) -> dict[int, Vendor]:
+    """index of finding -> the vendor it names.
+
+    Findings from ``headline_targets`` are news: their titles are sentences,
+    matched by mention plus an incident word rather than as victim names.
+    """
     hits: dict[int, Vendor] = {}
+    heads = headline_targets or set()
     for i, f in enumerate(findings):
         title = f.item.title if f.item else ""
+        as_headline = f.target in heads
         for vendor in vendors:
-            if vendor.matches(title):
+            hit = mentioned_in(vendor, title) if as_headline else vendor.matches(title)
+            if hit:
                 hits[i] = vendor
                 break
     return hits

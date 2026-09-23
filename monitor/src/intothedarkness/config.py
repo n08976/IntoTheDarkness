@@ -128,9 +128,10 @@ class Settings(BaseSettings):
     # How often the wrapper runs a watchlist-only sweep between the scheduled
     # reports. Read by deploy/monitor-run.sh; cron fires every 15 minutes.
     watchlist_interval_minutes: int = 60
-    # Targets carrying any of these tags never feed the watchlist: a headline
-    # that starts with "Microsoft" is not Microsoft on a leak site.
-    watchlist_skip_tags: list[str] = Field(default_factory=lambda: ["news"])
+    # Targets carrying any of these tags are news: their titles are headlines,
+    # so a vendor counts when it is mentioned alongside an incident word,
+    # rather than when the title *is* the vendor as on a leak site.
+    watchlist_headline_tags: list[str] = Field(default_factory=lambda: ["news"])
 
     # Generic webhook sink
     webhook_url: str = ""

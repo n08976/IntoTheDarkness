@@ -478,7 +478,9 @@ def test_watchlist_only_sweep_persists_nothing_and_respects_cooldown(settings, r
         InboxNotifier.sent = []
 
 
-def test_news_sources_never_feed_the_watchlist(settings, repo, tmp_path):
+def test_news_headlines_feed_the_watchlist_only_when_they_describe_an_incident(
+    settings, repo, tmp_path
+):
     _with_watchlist(settings, tmp_path, "Microsoft\n")
     CHANNELS["inbox"] = InboxNotifier
     InboxNotifier.sent = []
@@ -487,9 +489,14 @@ def test_news_sources_never_feed_the_watchlist(settings, repo, tmp_path):
         news = target(name="news-x", tags=["news"], channels=[])
         FEED[:] = [("a", "Alpha")]
         p.run([news])
-        FEED[:] = [("a", "Alpha"), ("b", "Microsoft")]
+        FEED[:] = [("a", "Alpha"), ("b", "Microsoft Ships a New Excel Feature")]
         report = p.run([news])
-        assert report.watchlist == [] and InboxNotifier.sent == []
+        assert report.watchlist == [] and InboxNotifier.sent == []      # no incident: not a match
+        FEED[:] = [("a", "Alpha"), ("b", "Microsoft Ships a New Excel Feature"),
+                   ("c", "Microsoft Confirms Breach of Support Systems")]
+        report = p.run([news])
+        assert [f.item.key for f in report.watchlist] == ["c"]
+        assert InboxNotifier.sent[-1].subject == "[URGENT] Vendor on leak site: Microsoft"
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
