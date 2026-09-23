@@ -13,6 +13,7 @@ import logging
 import httpx
 
 from .base import Message, Notifier, register
+from .defang import defanged, split_recipients
 
 log = logging.getLogger(__name__)
 
@@ -40,9 +41,18 @@ class ResendNotifier(Notifier):
             raise RuntimeError(f"resend channel unavailable: {why}")
 
         s = self.settings
+        raw, fanged = split_recipients(s.email_to, s.defang_recipients)
+        # Two deliveries at most: real links to those who can receive them,
+        # de-fanged links to those whose gateway will not pass the real ones.
+        for recipients, variant in ((raw, message), (fanged, defanged(message))):
+            if recipients:
+                self._post(recipients, variant)
+
+    def _post(self, recipients: list[str], message: Message) -> None:
+        s = self.settings
         payload = {
             "from": s.email_from,
-            "to": list(s.email_to),
+            "to": list(recipients),
             "subject": message.subject,
             "text": message.text or "(no body)",
         }

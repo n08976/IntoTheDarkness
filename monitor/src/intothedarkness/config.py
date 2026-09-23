@@ -98,10 +98,12 @@ class Settings(BaseSettings):
     # How far back the running list in an emailed report reaches. The report
     # leads with what is new since the last one; this is the tail below it.
     digest_days: int = 60
-    # Rewrite URLs in emailed reports as hxxp://host[.]tld. An institutional
-    # mail gateway was dropping every report that carried raw .onion links and
-    # passing the same report de-fanged. The console is never de-fanged.
-    defang_links: bool = True
+    # Recipients (addresses or bare domains) whose copy of a report gets its
+    # URLs rewritten as hxxp://host[.]tld. One institutional gateway drops any
+    # report carrying raw .onion links and passes the same report de-fanged,
+    # while a reader doing an investigation on another address needs the real
+    # links. Each recipient gets the form its gateway accepts. "*" means all.
+    defang_recipients: list[str] = Field(default_factory=list)
 
     # Generic webhook sink
     webhook_url: str = ""

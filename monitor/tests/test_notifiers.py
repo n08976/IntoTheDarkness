@@ -272,3 +272,39 @@ def test_smtp_fails_closed_when_starttls_is_unavailable(mail_settings, monkeypat
     assert server.login_args is None      # credentials never offered
     assert server.messages == []          # nothing sent
     assert server.quit_called             # connection still closed
+
+
+@respx.mock
+def test_resend_sends_real_links_and_defanged_links_to_the_right_recipients(settings):
+    # One gateway drops raw .onion links; another reader needs them to
+    # investigate. Each gets its own delivery, and nobody gets both.
+    settings.resend_api_key = "re_test"
+    settings.email_from = "itd@example.com"
+    settings.email_to = ["reader@home.example", "nick@hospital.example"]
+    settings.defang_recipients = ["hospital.example"]
+    route = respx.post("https://api.resend.com/emails").mock(
+        return_value=httpx.Response(200, json={"id": "abc"})
+    )
+
+    get_notifier("resend", settings).send(sample_message())
+
+    bodies = [json.loads(c.request.read()) for c in route.calls]
+    by_to = {tuple(b["to"]): b for b in bodies}
+    assert set(by_to) == {("reader@home.example",), ("nick@hospital.example",)}
+    assert "https://e.com/1" in by_to[("reader@home.example",)]["html"]        # clickable
+    assert "hxxp://e[.]com/1" in by_to[("nick@hospital.example",)]["html"]        # de-fanged
+    assert "https://" not in by_to[("nick@hospital.example",)]["text"]
+
+
+@respx.mock
+def test_resend_makes_one_delivery_when_nobody_needs_defanging(settings):
+    settings.resend_api_key = "re_test"
+    settings.email_from = "itd@example.com"
+    settings.email_to = ["a@example.com", "b@example.com"]
+    settings.defang_recipients = []
+    route = respx.post("https://api.resend.com/emails").mock(
+        return_value=httpx.Response(200, json={"id": "1"})
+    )
+    get_notifier("resend", settings).send(sample_message())
+    assert len(route.calls) == 1
+    assert json.loads(route.calls[0].request.read())["to"] == ["a@example.com", "b@example.com"]

@@ -23,7 +23,6 @@ from .notify import (
     render_subject,
     render_text,
 )
-from .notify.defang import defang
 from .scrapers import Fetcher, get_scraper
 from .storage import Repository, SnapshotStore, get_db
 
@@ -328,8 +327,6 @@ class Pipeline:
         html = render_digest_html(
             entries, new_keys, status=status, window_days=self.settings.digest_days
         )
-        if self.settings.defang_links:
-            text, html = defang(text), defang(html)
         return Message(subject=subject, text=text, html=html, findings=group)
 
     def _send_daily_digest(self, targets: Sequence[Target], report: RunReport) -> None:

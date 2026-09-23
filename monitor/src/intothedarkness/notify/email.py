@@ -7,6 +7,7 @@ import smtplib
 from email.message import EmailMessage
 
 from .base import Message, Notifier, register
+from .defang import defanged, split_recipients
 
 
 @register
@@ -30,13 +31,19 @@ class EmailNotifier(Notifier):
             raise RuntimeError(f"email channel unavailable: {why}")
 
         s = self.settings
-        msg = EmailMessage()
-        msg["Subject"] = message.subject
-        msg["From"] = s.email_from
-        msg["To"] = ", ".join(s.email_to)
-        msg.set_content(message.text or "(no body)")
-        if message.html:
-            msg.add_alternative(message.html, subtype="html")
+        raw, fanged = split_recipients(s.email_to, s.defang_recipients)
+        outgoing: list[EmailMessage] = []
+        for recipients, variant in ((raw, message), (fanged, defanged(message))):
+            if not recipients:
+                continue
+            msg = EmailMessage()
+            msg["Subject"] = variant.subject
+            msg["From"] = s.email_from
+            msg["To"] = ", ".join(recipients)
+            msg.set_content(variant.text or "(no body)")
+            if variant.html:
+                msg.add_alternative(variant.html, subtype="html")
+            outgoing.append(msg)
 
         if s.smtp_ssl:
             server: smtplib.SMTP = smtplib.SMTP_SSL(s.smtp_host, s.smtp_port, timeout=30)
@@ -60,7 +67,8 @@ class EmailNotifier(Notifier):
                     ) from None
             if s.smtp_user:
                 server.login(s.smtp_user, s.smtp_password)
-            server.send_message(msg)
+            for msg in outgoing:
+                server.send_message(msg)
         finally:
             with contextlib.suppress(smtplib.SMTPException, OSError):
                 server.quit()

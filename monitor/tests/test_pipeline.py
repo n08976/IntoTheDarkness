@@ -413,24 +413,3 @@ def test_without_the_digest_flag_a_quiet_run_sends_nothing(settings, repo):
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
-
-
-def test_inbox_reports_are_defanged_and_the_console_is_not(settings, repo):
-    # An institutional mail gateway dropped every report carrying raw .onion
-    # URLs and passed the same report de-fanged; the console is a terminal.
-    CHANNELS["inbox"] = InboxNotifier
-    InboxNotifier.sent = []
-    try:
-        p = pipeline(settings, repo)
-        FEED[:] = [("a", "Alpha")]
-        p.run([target(channels=["inbox", "capture"])])
-        FEED[:] = [("a", "Alpha"), ("b", "Beta")]
-        p.run([target(channels=["inbox", "capture"])])
-
-        mail, console = InboxNotifier.sent[-1], CapturingNotifier.sent[-1]
-        assert "hxxp://e[.]com/b" in mail.text and "https://" not in mail.text
-        assert "hxxp://" in mail.html and 'href="https://' not in mail.html
-        assert "https://e.com/b" in console.text                # console untouched
-    finally:
-        CHANNELS.pop("inbox", None)
-        InboxNotifier.sent = []
