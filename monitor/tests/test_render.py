@@ -134,3 +134,35 @@ def test_new_section_leads_with_priority_sectors_and_running_list_carries_only_t
     assert html.index("Mercy Clinic") < html.index("Acme Steel") and "Old Mill" not in html
     everything = render_digest_text(entries, {"a", "b"}, carry=())
     assert "Old Mill" in everything.split("DISCOVERED IN", 1)[1]
+
+
+def test_vendor_sec_filings_get_their_own_section_beneath_vendor_victims():
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    def f(key, target, title, **fields):
+        item = Item(key=key, target=target, title=title, fields=fields)
+        return Finding(kind=FindingKind.NEW, target=target, item=item,
+                       created_at=datetime(2026, 9, 23, tzinfo=UTC))
+
+    entries = [
+        f("a", "agg-x", "Beckman Coulter, Inc", watchlist="Beckman Coulter", group="metaencryptor"),
+        f("b", "sec-8k", "BOSTON SCIENTIFIC CORP", watchlist="Boston Scientific", form="8-K",
+          items="1.05", published="2026-09-08", status="Item 1.05"),
+        f("c", "agg-x", "Textile City", sector="manufacturing"),
+    ]
+    text = render_digest_text(entries, {"c"})
+    marks = ("VENDOR VICTIMS", "SEC 8-K CYBER FILINGS", "DISCOVERED IN")
+    i_v, i_f, i_d = (text.index(k) for k in marks)
+    assert i_v < i_f < i_d
+    victims = text.split("SEC 8-K CYBER FILINGS", 1)[0]
+    assert "Beckman Coulter, Inc" in victims and "BOSTON SCIENTIFIC" not in victims   # not mixed in
+    assert "8-K items 1.05 filed 2026-09-08 — Item 1.05" in text
+    assert text.count("BOSTON SCIENTIFIC CORP") == 1
+    html = render_digest_html(entries, {"c"})
+    marks = ("Vendor victims", "SEC 8-K cyber filings", "New since")
+    h_v, h_f, h_n = (html.index(k) for k in marks)
+    assert h_v < h_f < h_n
+    assert html.count("BOSTON SCIENTIFIC CORP") == 1 and "filed 2026-09-08" in html

@@ -127,13 +127,30 @@ def _links(finding: Finding) -> list[str]:
     return lines
 
 
+def _is_filing(f: Finding) -> bool:
+    return bool(f.item and str(f.item.fields.get("form", "")).startswith("8-K"))
+
+
 def _split_vendor_victims(
     entries: Sequence[Finding],
-) -> tuple[list[Finding], list[Finding]]:
-    """Watchlist matches first, everything else second."""
+) -> tuple[list[Finding], list[Finding], list[Finding]]:
+    """(vendor victims, vendor SEC filings, everything else)."""
     hit = [f for f in entries if f.item and f.item.fields.get("watchlist")]
     rest = [f for f in entries if not (f.item and f.item.fields.get("watchlist"))]
-    return hit, rest
+    filings = [f for f in hit if _is_filing(f)]
+    victims = [f for f in hit if not _is_filing(f)]
+    return victims, filings, rest
+
+
+def _filing_line(f: Finding) -> str:
+    it = f.item
+    if it is None:
+        return f.message
+    return (
+        f"{it.title}   [vendor: {it.fields.get('watchlist')}]  "
+        f"{it.fields.get('form', '8-K')} items {it.fields.get('items') or '?'} "
+        f"filed {it.fields.get('published', '?')} — {it.fields.get('status', '')}"
+    )
 
 
 def _newest_first(findings: Sequence[Finding]) -> list[Finding]:
@@ -172,7 +189,7 @@ def render_digest_text(
     carry: Sequence[str] = ("healthcare",),
 ) -> str:
     """The full running list, with anything new since the last report first."""
-    vendors, entries = _split_vendor_victims(entries)
+    vendors, filings, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running, uncarried = _carried(
         [f for f in entries if not (f.item and f.item.key in new_keys)], carry
@@ -182,7 +199,8 @@ def render_digest_text(
         f"{len(new)} new since the last report"
         + (f" across {target_label}" if target_label else "")
         + f"; {len(running)} more in the last {window_days} days."
-        + (f" {len(vendors)} VENDOR VICTIM(S)." if vendors else ""),
+        + (f" {len(vendors)} VENDOR VICTIM(S)." if vendors else "")
+        + (f" {len(filings)} VENDOR SEC FILING(S)." if filings else ""),
         "",
     ]
     if status:
@@ -203,6 +221,18 @@ def render_digest_text(
                 f"  !! {f.item.summary() if f.item else f.message}"
                 f"   [vendor: {vendor}]" + (f"  by {group}" if group else "")
             )
+            lines += _links(f)
+        lines.append("")
+
+    # Directly beneath: vendors that told the SEC about a cyber incident.
+    if filings:
+        lines += [
+            "!!  SEC 8-K CYBER FILINGS — WATCHLIST VENDORS (" + str(len(filings)) + ")",
+            "!!" + "=" * 44,
+            "",
+        ]
+        for f in _newest_first(filings):
+            lines.append(f"  !! {_filing_line(f)}")
             lines += _links(f)
         lines.append("")
 
@@ -356,6 +386,21 @@ _DIGEST_HTML = _env.from_string(
   </div>
   {% endif %}
 
+  {% if filings %}
+  <div style="border:3px solid #1d4ed8;border-radius:6px;padding:2px 16px 12px;
+              margin-bottom:24px;background:#eff6ff">
+    <h2 style="font-size:16px;margin:12px 0 4px;color:#1e3a8a;text-transform:uppercase;
+               letter-spacing:.04em">
+      &#9878; SEC 8-K cyber filings — watchlist vendors ({{ filings|length }})</h2>
+    <p style="margin:0 0 8px;color:#1e3a8a;font-size:12px">
+      Vendors that disclosed a cybersecurity incident to the SEC. Item 1.05 is a material
+      incident by the company's own determination; 8.01 is incident wording under other events.</p>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      {% for f in filings %}{{ entry(f) }}{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if new %}
   <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
               margin-bottom:24px;background:#fef2f2">
@@ -395,7 +440,11 @@ _ENTRY = _env.from_string(
   {%- if f.item and f.item.fields.get('watchlist') %}
   <span style="font-size:11px;color:#92400e;font-weight:600;margin-left:6px">
     vendor: {{ f.item.fields['watchlist'] }}
-    {%- if f.item.fields.get('group') %} · by {{ f.item.fields['group'] }}{% endif %}</span>
+    {%- if f.item.fields.get('group') %} · by {{ f.item.fields['group'] }}{% endif %}
+    {%- if f.item.fields.get('form') %} · {{ f.item.fields['form'] }}
+      items {{ f.item.fields.get('items') or '?' }}
+      filed {{ f.item.fields.get('published') }}
+      · {{ f.item.fields.get('status') }}{% endif %}</span>
   {%- endif %}
   <span style="font-size:11px;color:#6b7280;text-transform:uppercase;
                letter-spacing:.04em;margin-left:6px">{{ sector }}</span>
@@ -434,7 +483,7 @@ def render_digest_html(
 ) -> str:
     from ..models import utcnow
 
-    vendors, entries = _split_vendor_victims(entries)
+    vendors, filings, entries = _split_vendor_victims(entries)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running, uncarried = _carried(
         [f for f in entries if not (f.item and f.item.key in new_keys)], carry
@@ -442,6 +491,7 @@ def render_digest_html(
     return _DIGEST_HTML.render(
         total=len(entries),
         vendors=_newest_first(vendors),
+        filings=_newest_first(filings),
         new=_priority_first(new, priority),
         running=_newest_first(running),
         uncarried=uncarried,

@@ -699,14 +699,18 @@ Every emailed report has the same shape, top to bottom:
    source, whose name matches `watchlist/vendors.txt`. These are also mailed
    the moment they are found, subject `[URGENT] Vendor on leak site: <name>`,
    marked critical, outside the report schedule.
-2. **New since the last report** — every sector, with the priority sectors
+2. **SEC 8-K cyber filings — watchlist vendors.** Vendors that disclosed a
+   cybersecurity incident to the SEC (Item 1.05, or incident wording under
+   Item 8.01), each linking to the filing. Found by the EDGAR route described
+   below; mailed at once as `[URGENT] Vendor 8-K cyber filing: <name>`.
+3. **New since the last report** — every sector, with the priority sectors
    (`ITD_PRIORITY_SECTORS`, default healthcare) listed first, then the rest,
    newest first within each.
-3. **Discovered in the last 60 days** — the running list, carrying only the
+4. **Discovered in the last 60 days** — the running list, carrying only the
    sectors in `ITD_DIGEST_SECTORS` (default healthcare) with the rest counted
    on one line. At 30–180 victims a day across all sectors, a full running list
    is not an email anyone reads; set it empty to carry everything.
-4. What the sweep managed — targets swept, items read, any target that failed
+5. What the sweep managed — targets swept, items read, any target that failed
    — so an empty report cannot be mistaken for a quiet day when it means the
    sources were unreachable.
 
