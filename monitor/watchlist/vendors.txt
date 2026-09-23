@@ -1,0 +1,634 @@
+1NHealth
+221 Consulting
+3Cloud, LLC
+A2ZRadidoilogy
+AB SCIEX LLC
+Abbott
+Abbott
+Abbott
+Abbott
+Abbott
+Abbott
+Abbott
+Abiomed
+Abnormal 
+Abridge 
+ACIST
+Acrobits Software
+ActualMeds Corporation
+Adobe Inc
+Advanced Instruments
+Advanced Instruments
+Advanced Microscopy Techniques
+Aha! Insights Technology LLC
+Airtable
+AlayaCare USA, Inc.
+Alpha Medical Equipment
+Alpha Medical Equipment
+American College of Radiology
+AMETEK Power Quality Solutions
+Ametris
+AMN
+Amplifire
+Anaconda
+Analytics Aura
+Anterior
+Anthropic
+Apex Medical AI
+Applied Spectral Imaging Inc
+Apricorn
+Aquent Robohead
+Aquifer
+Array
+AS Software, Inc
+AS Ultrasound
+Ascom
+Ash Wellness
+ASHP, Pharmacy Professionals Foundation
+Asteres
+Astrata Inc.
+AT&T
+Attack Forge
+Audio Directions
+Audioscan
+Avalon Action Alliance
+Avasure
+Avasure
+Avesis
+Avidity Science
+Axis Communications
+Axlab
+Azara
+Bailey Group Consulting
+Baker Tilly
+Bamboo Health (previously Patient Ping) 
+Bayer
+BD
+BD
+BD
+BD
+BD
+Beck Institute for Cognitive Behavioral Therapy
+Beckman Coulter
+Beckman Coulter
+Bedford, Freeman & Worth Publishing Group LLC (a division of Macmillan Learning)
+Benco
+Benco Dental
+BeneLynk
+Beyond Trust
+BioLegend
+Biome Analytics, INC. 
+BioMérieux
+BioTechne
+Biotronik
+Biotronik Inc
+Blue & Co., LLC
+Blue Wind Medical
+BMJ Publishing Inc
+Bodyswap
+Boston Scientific
+Boston Scientific
+Boston Scientific
+Brainlab
+Brainlab
+Breg
+Bunkerhill Health
+CancerLinQ
+Canfield Scientific, Inc.
+Canon
+Canon
+Canon
+Canopy
+Canopy Works
+Capsa
+Captify Health
+Cardinal Health
+Carenostics Inc
+Carestream Health
+Castor
+Catalina Imaging
+Catalyst Medtech
+CBH
+CCP Cardiology Consultans-SenaHealth 
+Cedar Mountain Software
+Censis
+Cepheid
+Ceribell Inc
+CertaScan Technologies, LLC
+Certiphi
+Charge Health
+Chartis Group, Inc.
+Chiefly
+Chronicle Medical Software
+Cisco
+Cision US Inc.
+Citrix
+Clade
+Clarium
+Clarius Mobile Health Corp
+CLEAR
+Clear vu iq
+Clearpath - MRO
+Clinical Ink
+Clinisys 
+Clinisys 
+CMI
+Cochlear Americas
+Cognitive Innocations 
+Complex care solutions
+Conexsys HI-IQ
+"Connectwise	"
+Constant Therapy Health
+Converge 1
+Converge 1
+Core Business Technologies 
+Corvia Medical, Inc.
+CounselEar
+Crothall Healthcare
+CSC
+CTI - Conversion Technologies International, Inc.
+CTM (Corporate Travel Management)
+CTS Healthcare
+Culture Bioscience
+Curalinc Healthcare
+CyberCrunch
+Cytek Biosciences
+Daikin
+DASI simulations
+Data Innovations, Inc.
+Databank
+Datafirst
+Datavant
+Datavant
+DatCart
+Daybreak
+Dell
+Delta Dental of Pennsylvania
+Dexcom
+Dexis
+Diasorin
+Dickson
+Digirad Diagnostic Imaging Inc. 
+Diligent Corp. 
+Disruptive Technologies
+Disruptive Technologies
+DMS Health Technologies
+DMS Health Technologies
+DMS Health Technologies
+Dolphin Imaging & Management Solutions
+Downtime Trace
+Dr Brown's Company
+Dreamwave AI, Inc.
+DriveSafety, Inc.
+DueNorth
+Dynex Technologies
+e4
+EAB Starfish
+Eastern Time a Division of Sciens Building Solutions
+Echosens
+Edifecs
+Education Management Solutions, LLC
+Eisner Amper
+ElectraMED Corporation
+Elligint Health Inc.
+Elliott Health Information Pros, Inc.
+Elsevier
+Empower (dba Corestream)
+EMPOWERED PC
+EnableComp
+Epredia
+Equifax Workforce Solutions LLC
+ERISA Recovery
+ESO
+Experian
+Experian
+Express-Scripts, Inc
+FFF Enterprises
+Figma
+Find Help
+FireFly
+First Data Bank
+Firstsource
+Five 9
+Fivos Health
+Fize Medical
+Fleming-AOD
+Flo Tech (Flex Technology Group)
+Fluke
+FocusForward
+FotoFinder
+FUJIFILMS
+GE
+GE
+GE
+GE
+GE
+GE
+GE
+GE
+GE Healthcare
+GE Healthcare
+GE Healthcare
+GE Healthcare
+GE Healthcare
+GE Healthcare
+GE Healthcare
+General Devices
+GetWellNetwork, Inc.
+GiveCampus
+Go Fund Me Pro
+Google
+GoTo
+Green Security
+Grundium Inc.
+"Guidehouse	"
+GuidePoint Security for CrowdStrike, Inc.
+Guild Education
+Haemonetics
+Haemonetics
+HappyScribe
+Health Innovas/IRIS
+HealthEdge
+Healthfuse
+HealthSherpa 
+Healthstream
+Healthy Roster
+Heartflow
+Henry Schein One
+HeyGen
+Hike Health
+Hippocratic AI
+Hivebrite
+HSX
+HUDL
+Huron Consulting Group
+Hyperfine Operations, Inc.
+Hyperfine Operations, Inc.
+ICON
+ICU Medical
+IgniteData
+Image Monitoring USA Inc
+ImageNet, LLC
+IMBIO
+IMGEN Technologies
+ImpediMed
+Infectious Disease Connect
+Infervision
+Infradapt
+Ingenia Health
+Innerspace Healthcare
+Inspire Medical Systems
+Integra Lifesciences
+Integrated DNA Technologies, Inc.
+Integrated Security systems
+Integrated Security Systems, LLC
+Intellivisit Solutions
+Intellivisit Solutions
+Intuitive Surgical
+Intuitive Surgical
+Intuitive Surgical
+Inventory Optimization Solutions
+Invicti
+Invoca
+IQVIA
+Iron Mountain, Inc.
+Jaeger Medical
+JB Learning
+Jeferson (Internal)
+Johnson Controls
+Johnson Controls
+Johnson Controls
+K2 Scientific
+Kalliope Technology, LLC
+Kaplan
+Keffer Development Services
+Keriton
+Kestra Medical Technologies
+Keystone First Health Plan
+Kindsight
+King&Spalding LLP
+Knowtion/ RSource
+Konica Minolta
+KPMG
+Krystal Ball : MyTimeStudy
+Kubtec
+Kyverna Therapeutics
+Laborie Medical Technologies
+Laborie Medical Technologies Corp.
+Laerdal Medical
+Lap
+Latent Health
+LeanTaas
+Legal Claims.AI
+LegalEaseSolutions
+Lehigh University, College of Health
+Leica Microsystems
+Lift Net
+Limbs & Things, Inc.
+Linus Health
+LivaNova
+LivaNova USA, Inc.
+Living Security
+Loccioni
+Lumeto
+Lutron
+Magnum Transaction Sub (DBA Lyric)
+Malvern Systems, Inc
+Mastech Digital
+Matterport
+MBF Bioscience
+MBMS
+Meadow Technologies
+MedEdMentor
+MedEl
+MedHOK, LLC
+Medidata Solutions
+Medidata Solutions
+Med-Metrix
+Medtronic
+Medtronic
+Medtronic
+Meduit
+MeVis Medical Solutions AG
+MGC Diagnostics Corporation
+MGC Diagnostics Corporation
+Microsoft
+Microsoft
+Microsoft
+Microsoft
+Microsoft
+Microsoft (Nuance)
+MIllipore Sigma
+MiM Software Inc
+Miro
+MITRE
+Modernizing Medicine
+Molecular Devices, LLC.
+Molecular Devices, LLC.
+Monday
+Moss Adams
+Movi Healthcare Inc
+MRI
+My Vitals Pro LLC
+NationsBenefits
+NeuroLeadership Institute, Inc.
+Neurologic Solutions
+Neurological Clinical Research Institute at MGH
+New Castle Communications
+Nightingale 
+NIH
+Nihon Kohden
+Nihon Kohden
+nPhase, Inc.
+NRC Health
+NV Access
+Oasis
+Oatmeal Health
+Olio
+Olleyes
+Olympus
+Olympus
+Olympus
+Omatic
+Omnicell INC.
+ONCO, Inc.
+Oncocyte
+Onity Mobile Access and Electronic Locking
+Onsite Management Group
+OpenCTI
+OpenEvidence
+OpenMarkets
+Oracle (formerly Cerner)
+Orgamation Technologies, Inc
+Orthoscan
+Our Privacy
+Ovag International
+Oxford Nanopore Technologies
+Pangram
+Pantheon
+Paraben
+Parkhurst Dining
+Patient Funding Alternatives LLC
+Patient360
+PDi
+Pena4
+Perforce Software, Inc
+Permobil
+PFS
+Pharmacy Stars
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Philips
+Phillips
+Phillips Fuel Systems
+Pitchbook
+PNC Bank
+Practicing Excellence
+Precision Mechanical Services
+Procare Software
+Procyrion, Inc. 
+Propelus
+Proscia
+Prosoft Software, Inc. dba Prosoft Clinical
+Provider Trust
+PulmonX
+Pulse Infoframe US, LLC
+Qualified Health
+Quest Analytics
+QuidelOrtho
+QuidelOrtho
+QuidelOrtho
+Quinsite, Inc
+QUREAI
+RAD AI
+RadFormation, Inc
+Radiometer America, Inc.
+Receivable Recovery Solutions Inc
+Rees Scientific
+RegFox (a Webconnex company)
+RELAY NETWORK, LLC
+Relish
+Renishaw Healthcare Inc.
+Replit
+Resoundant
+Restorative Therapies
+RevolutionEHR
+RFXCel
+Rhapsody
+Rivanna
+RLDatix
+RLDatix
+Roche Diagnostics 
+"Roche Diagnostics Corporation	"
+"Roche Diagnostics Corporation	"
+"Roche Diagnostics Corporation	"
+"Roche Diagnostics Corporation	"
+SailPoint
+Saviynt
+Sawtooth Software
+Schneider Electric - Digital Power
+Sciex
+Sebia Inc.
+SECA Corporation
+Sectra
+SecureW2
+Shared Imaging
+Shared Imaging
+Shared Imaging
+SHI International Corp.
+Siemens
+Siemens
+Siemens
+Siemens
+Siemens
+Siemens
+Siemens Healthineers
+Siemens Healthineers
+Siemens Healthineers
+Siemens Healthineers
+Siemens Healthineers
+Siemens Healthineers
+Siftwell Analytics, Inc.
+SightX
+SimiTree Acquisition, LLC
+SimiTree Acquisition, LLC
+Simple Systems Group, LLC
+Six Overground
+SJ MedConnect, Inc. (DBA Thalamus)
+Skytron
+Smart Data Solutions 
+SmarterDx
+Smith Nephew
+Sodexo
+Softheon Inc.
+Solis
+Solvemed
+Solventum
+Solventum
+Solventum
+Soma Lab Inc
+Sonicu
+South Jersey Radiology
+SPOK
+Stago
+Starlink
+State Collections Services Inc
+State Collections Services Inc
+StatLab
+Statline
+Steris Corporation
+Steris Corporation
+StrangeBee
+Strata Decision Technology, LLC
+Stryker Corp.
+Stryker Corp.
+Suitable
+SureTrend Cloud/Ensure Hygiena
+Sutherland Healthcare Solutions, Inc.
+Suture Health
+Sway Medical
+Swisslog-Healthcare (TransLogic)
+Symmetric Health Solutions
+Synergy Medical Solutions
+Syntermed
+Synthesia Ltd.
+Sysmex
+Sysmex
+Tabas & Rosen
+Tactus Therapy Solutions Ltd.
+Taylor Healthcare
+Teambuildr
+Teamworks Innovations Inc
+Tecan
+Teladoc Health
+Teladoc Health
+Teleskope
+Telexy
+Tenable
+Terumo BCT
+Test mxp300
+THD
+The Tri-M Group
+Thermo Fisher Scientific Inc.
+Thermo Fisher Scientific Inc.
+Thermo Fisher Scientific Inc.
+Thermo Fisher Scientific Inc.
+Thermo Fisher Scientific Inc.
+Thorasys
+TPR Solutions
+Trideo
+TriNetX
+Tri-State HVAC
+Triton
+Trulla
+TrustCommerce
+TurnCare, Inc.
+TurnItIn
+TUVNORD
+Typhon Group
+UiPath
+United Behavioral Health
+Universal Health Services
+Unlock Health inc.
+uPerform
+Vanderbilt University Medical Center
+Varian
+Varian
+Varian
+Varonis
+Vastian
+VaTech America
+Vee Healthtek
+Ventra Health
+Vertex
+Vestibular First
+Vigyanix
+Virsys12, LLC
+Visante Consulting, LLC
+Vista Higher Learning
+VIZ.ai
+Vizlitics
+Volpara Health Incorporated
+Vyond
+Waystar
+WebMD
+WellD
+Wellovate / Waya Health
+WellRight, Inc.
+WellSky
+Werfen
+Werfen
+Werfen
+Werfen
+Wolters Kluwer
+Womb-ish
+Woodway USA
+Workday
+Workforce Software
+WoundVision
+Xby2
+XIFIN Inc.
+X-ISS
+Xoran
+XSELL Technologies
+Xtium
+Xtreme Power Conversion Corporation
+Yunu
+Zebra Technologies
+Zeiss
+Zelis Healthcare, LLC
+Zimmer Biomet
+Zoho Technology Corporation
+ZOLL Itamar
