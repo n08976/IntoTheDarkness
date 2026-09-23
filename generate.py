@@ -221,6 +221,16 @@ def load():
         return json.load(f)
 
 
+def ordered(cat: dict) -> list:
+    """A category's links in alphabetical order of title, case-insensitive.
+
+    bookmarks.json keeps whatever order links were added in -- that is what
+    makes a one-link addition a three-line diff -- and every generated page
+    sorts at output time, so all three agree and the file stays easy to edit.
+    """
+    return sorted(cat["links"], key=lambda link: link["title"].casefold())
+
+
 def is_onion(url: str) -> bool:
     return ".onion" in url
 
@@ -237,7 +247,7 @@ def build_dashboard(data: dict) -> str:
     sections = []
     for cat in data["categories"]:
         rows = []
-        for link in cat["links"]:
+        for link in ordered(cat):
             url = esc(link["url"])
             raw = link["url"]
             # No onion/clearnet badge: the address itself says which it is.
@@ -304,7 +314,7 @@ def build_netscape(data: dict) -> str:
     for cat in data["categories"]:
         out.append('        <DT><H3>' + esc(cat["name"]) + '</H3>')
         out.append('        <DL><p>')
-        for link in cat["links"]:
+        for link in ordered(cat):
             out.append('            <DT><A HREF="' + esc(link["url"]) + '">' + esc(link["title"]) + '</A>')
         out.append('        </DL><p>')
     out.append('    </DL><p>')
@@ -320,7 +330,7 @@ def build_launcher(data: dict) -> str:
     sections = []
     for cat in data["categories"]:
         rows = []
-        for link in cat["links"]:
+        for link in ordered(cat):
             url = esc(link["url"])
             rows.append(
                 '        <li class="entry"><a class="lnk" href="' + url
