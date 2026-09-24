@@ -156,6 +156,10 @@ class Settings(BaseSettings):
     site_push: bool = True
     site_defang: bool = True
     site_keep_reports: int = 400
+    # Run after a successful push, e.g. the host's own deploy command over
+    # SSH. cPanel is supposed to deploy on push by itself; its first attempt
+    # produced an empty log, so the channel asks explicitly.
+    site_deploy_cmd: str = ""
 
     # Generic webhook sink
     webhook_url: str = ""

@@ -19,3 +19,28 @@ def test_web_channel_is_unavailable_without_a_directory(settings):
     settings.site_dir = None
     ok, why = get_notifier("web", settings).available()
     assert not ok and "ITD_SITE_DIR" in why
+
+
+def test_web_channel_runs_the_deploy_command_after_a_push(settings, tmp_path):
+    import subprocess
+
+    site = tmp_path / "site"
+    site.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "master", str(site)], check=True)
+    bare = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "master", str(bare)], check=True)
+    subprocess.run(["git", "-C", str(site), "remote", "add", "origin", str(bare)], check=True)
+    subprocess.run(["git", "-C", str(site), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(site), "config", "user.name", "t"], check=True)
+    marker = tmp_path / "deployed"
+    settings.site_dir = site
+    settings.site_push = True
+    settings.site_deploy_cmd = f"touch {marker}"
+
+    get_notifier("web", settings).send(Message(subject="s", text="t", html="<p>x</p>"))
+
+    assert marker.exists()                                          # deploy ran after the push
+    log = subprocess.run(
+        ["git", "-C", str(bare), "log", "--oneline"], capture_output=True, text=True
+    )
+    assert "Report" in log.stdout                                   # and the push happened

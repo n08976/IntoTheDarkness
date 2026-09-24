@@ -663,7 +663,10 @@ deploys it — cPanel's Git Version Control runs the checkout's `.cpanel.yml` on
 every push. The page carries no product name and nothing about who runs it,
 only the results, and links are de-fanged by default (`ITD_SITE_DEFANG`)
 because the page is public. `ITD_SITE_KEEP_REPORTS` (400) bounds the archive
-until a database takes over history.
+until a database takes over history. `ITD_SITE_DEPLOY_CMD`, if set, runs
+after a successful push — the host's own deploy call over SSH, for a host
+whose push hook cannot be relied on (cPanel's first attempt left an empty
+log; asking explicitly through its API deployed in seconds).
 
 ### Links that survive a mail gateway
 

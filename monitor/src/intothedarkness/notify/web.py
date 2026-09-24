@@ -105,6 +105,15 @@ class WebNotifier(Notifier):
 
         if s.site_push and (root / ".git").exists():
             self._push(root, stamp)
+            if s.site_deploy_cmd:
+                out = subprocess.run(
+                    s.site_deploy_cmd, shell=True, capture_output=True, text=True, timeout=180
+                )
+                if out.returncode != 0:
+                    raise RuntimeError(
+                        f"site deploy command failed: {(out.stderr or out.stdout).strip()[:300]}"
+                    )
+                log.info("site deploy requested")
 
     @staticmethod
     def _push(root: Path, stamp: str) -> None:
@@ -119,5 +128,6 @@ class WebNotifier(Notifier):
         git("add", "-A")
         if git("status", "--porcelain").strip():
             git("commit", "-q", "-m", f"Report {stamp}")
-        git("push", "-q")
+        # Name the remote and branch: a fresh checkout has no upstream yet.
+        git("push", "-q", "-u", "origin", "HEAD")
         log.info("site published: %s", stamp)
