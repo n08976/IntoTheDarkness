@@ -16,6 +16,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .. import diag
 from .base import Message, Notifier, register
 from .defang import defang
 
@@ -40,7 +41,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <main>
-  <div class="top"><h1>Scan results</h1><span>{stamp}</span><a href="reports/">all reports</a></div>
+  <div class="top"><h1>Scan results</h1><span>{stamp}</span>{banner}<a href="reports/">all reports</a><a href="#diagnostics">diagnostics</a></div>
 {body}
 </main>
 </body>
@@ -88,7 +89,14 @@ class WebNotifier(Notifier):
         # The report's own footer names the product; the page names nothing.
         body = re.sub(r"IntoTheDarkness\s*·\s*", "", body)
 
-        page = PAGE.format(stamp=stamp, body=body)
+        events = diag.load(Path(s.issues_file))
+        issues = diag.open_issues(events)
+        body += "\n" + diag.render_html(events)
+        banner = (
+            f'<a href="#diagnostics" style="color:#991b1b;font-weight:600">'
+            f"&#9888; {len(issues)} open issue(s)</a>" if issues else ""
+        )
+        page = PAGE.format(stamp=stamp, body=body, banner=banner)
         reports = root / "reports"
         reports.mkdir(parents=True, exist_ok=True)
         (root / "index.html").write_text(page, encoding="utf-8")

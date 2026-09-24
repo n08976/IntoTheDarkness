@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     # produced an empty log, so the channel asks explicitly.
     site_deploy_cmd: str = ""
 
+    # Operational events (Tor down/rebuilt, failed sweeps) are logged here and
+    # shown in the site's Diagnostics section instead of being mailed.
+    issues_file: Path = PROJECT_ROOT / "data" / "issues.jsonl"
+
     # Generic webhook sink
     webhook_url: str = ""
 

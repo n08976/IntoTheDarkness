@@ -67,3 +67,4 @@ ignore_missing_imports = true
 "tests/test_ctiwatch.py" = ["E501"]
 # Inline HTML/CSS templates; wrapping them would break nothing but reads worse.
 "src/intothedarkness/notify/web.py" = ["E501"]
+"src/intothedarkness/diag.py" = ["E501"]

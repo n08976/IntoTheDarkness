@@ -70,6 +70,15 @@ import_app = typer.Typer(no_args_is_help=True, help="Import target lists from ot
 app.add_typer(sector_app, name="sector")
 bm_app = typer.Typer(no_args_is_help=True, help="The curated bookmarks list.")
 app.add_typer(import_app, name="import")
+@app.command("diag")
+def diag_cmd(recent: int = typer.Option(20, "--recent", "-n", help="Events to show.")) -> None:
+    """Open issues and recent operational events -- what happened, and when."""
+    from . import diag
+
+    events = diag.load(get_settings().issues_file)
+    console.print(escape(diag.render_text(events, recent=recent)))
+
+
 wl_app = typer.Typer(no_args_is_help=True, help="The priority vendor watchlist.")
 app.add_typer(wl_app, name="watchlist")
 

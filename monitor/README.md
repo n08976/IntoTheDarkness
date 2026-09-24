@@ -696,9 +696,15 @@ the clock face.
 
 Before every sweep the script tests Tor with a real SOCKS5 CONNECT — not a pid
 check, because a Tor process can be running, listening and bootstrapped and
-still unable to route — and if the circuit is dead, tears Tor down, rebuilds it
-through meek bridges, and mails to say so. A sweep that fails, or a target that
-errors, mails too. Silence means: ran, nothing new.
+still unable to route — and if the circuit is dead, tears Tor down and rebuilds
+it through meek bridges. None of this is mailed. Every operational event — Tor
+found dead, Tor rebuilt, a sweep that failed or ran partial, a sweep that ran
+clean — is appended to `data/issues.jsonl` (`deploy/ops_log.py`) and shown in
+the site's **Diagnostics** section: open issues, the last clean sweep, recent
+events. An issue stays open until a later event resolves it (Tor down until Tor
+is rebuilt or any sweep completes; a failed sweep until a clean one).
+`itd diag` prints the same from the command line. The inbox carries findings
+only; silence means: ran, nothing new.
 
 A watchlist-only sweep persists nothing on purpose. The next full sweep still
 sees everything as new and reports it exactly as it would have; the only effect
@@ -861,6 +867,7 @@ src/intothedarkness/
   loader.py         YAML → Target/Rule/sectors, with useful errors
   pipeline.py       scrape → diff → enrich → watchlist → rules → dedupe → notify → record
   watchlist.py      the vendor list: parsing, name and headline matching
+  diag.py           operational events log; open-issue resolution; renderers
   scrapers/         fetch.py (network profiles, retries, throttle, robots)
                     html.py, json_api.py, dls.py, embedded.py, rss.py,
                     darkfield.py, ctiwatch.py, sec.py, suggest.py
@@ -876,7 +883,7 @@ src/intothedarkness/
                     defang.py (per-recipient URL rewriting)
   investigations/   case.py
 deploy/             monitor-run.sh (the scheduled sweep), crontab,
-                    ops_notify.py (failure/recovery mail), Dockerfile, torrc
+                    ops_log.py (records operational events), Dockerfile, torrc
 watchlist/          vendors.txt (priority vendors; edited here, fetched at run time)
 ```
 

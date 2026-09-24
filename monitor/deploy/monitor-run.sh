@@ -8,9 +8,9 @@
 # exits non-zero when the handshake fails, which is the only signal that
 # distinguishes a working Tor from a convincing corpse.
 #
-# Silence from this script means "ran, nothing new". Anything that breaks
-# sends mail, because an unnoticed broken monitor looks exactly like a quiet
-# week on the leak sites.
+# Silence from this script means "ran, nothing new". Anything that breaks is
+# recorded (deploy/ops_log.py) and shown in the site's Diagnostics section,
+# not mailed: the machine heals what it can and keeps the record.
 set -uo pipefail
 
 PROJECT="${ITD_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -77,9 +77,9 @@ elif [ "${1:-}" = "--watchlist" ]; then
     MODE="watchlist"
 fi
 
-notify() {
-    "${VENV}/python" "${PROJECT}/deploy/ops_notify.py" "$1" "$2" >>"${LOG}" 2>&1 \
-        || log "WARN could not send ops mail: $1"
+record() {
+    "${VENV}/python" "${PROJECT}/deploy/ops_log.py" "$1" "$2" "${3:-}" >>"${LOG}" 2>&1 \
+        || log "WARN could not record event: $1"
 }
 
 cd "${PROJECT}" || exit 1
@@ -110,37 +110,15 @@ if ! timeout 150 "${VENV}/itd" tor status >/dev/null 2>&1; then
         log "tor rebuilt; circuit established on ${SOCKS_PORT}"
     else
         log "FAIL tor could not be rebuilt -- no sweep this cycle"
-        notify "IntoTheDarkness: Tor is down and could not be rebuilt" \
-"The scheduled sweep could not start because Tor could not be brought back up.
-
-Nothing was scraped this cycle, so an empty findings inbox right now means
-nothing. Monitoring is blind until this is fixed.
-
-  host    $(hostname)
-  time    $(date -u +'%Y-%m-%d %H:%M UTC')
-  log     ${LOG}
-  tor log ${PROJECT}/data/tor-run/tor.log
-
-Try by hand:
-  itd tor down
-  itd tor up --bridges meek --socks-port ${SOCKS_PORT} --control-port ${CONTROL_PORT}
-  itd tor status"
+        record tor-down "Tor could not be rebuilt; no sweep this cycle" \
+"tor log: ${PROJECT}/data/tor-run/tor.log
+try: itd tor down && itd tor up --bridges meek --socks-port ${SOCKS_PORT} --control-port ${CONTROL_PORT}"
         exit 1
     fi
 fi
 
 if [ "${healed}" -eq 1 ]; then
-    notify "IntoTheDarkness: Tor recovered — good to go" \
-"Tor was not routing at the start of this sweep. It has been torn down and
-rebuilt through meek bridges, a circuit is established, and the sweep is
-running normally again.
-
-  host   $(hostname)
-  time   $(date -u +'%Y-%m-%d %H:%M UTC')
-  socks  127.0.0.1:${SOCKS_PORT}
-
-No action needed. This message exists so that a silent recovery is not
-mistaken for a monitor that never broke."
+    record tor-recovered "Tor was not routing; rebuilt through meek bridges, circuit established"
 fi
 
 # --- the sweep itself ------------------------------------------------------
@@ -162,31 +140,17 @@ printf '%s\n' "${out}" >>"${LOG}"
 case "${rc}" in
     0)
         log "OK ${summary:-run complete}"
+        record sweep-ok "${MODE}: ${summary:-run complete}"
         ;;
     2)
         log "PARTIAL ${summary:-run complete} (one or more targets errored)"
-        notify "IntoTheDarkness: sweep finished with target errors" \
-"The sweep ran, but at least one target failed. Findings from the targets that
-did work have been delivered as usual; anything behind the failing target was
-not checked this cycle.
-
-  host  $(hostname)
-  time  $(date -u +'%Y-%m-%d %H:%M UTC')
-  ${summary:-}
-
-$(printf '%s\n' "${out}" | tail -25)"
+        record sweep-partial "${MODE}: ${summary:-run complete} — one or more targets errored" \
+            "$(printf '%s\n' "${out}" | grep -vE '^INFO' | tail -12)"
         ;;
     *)
         log "FAIL itd run exited ${rc}"
-        notify "IntoTheDarkness: sweep failed" \
-"The scheduled sweep failed to complete (exit ${rc}). Nothing was checked this
-cycle, so an empty findings inbox right now means nothing.
-
-  host  $(hostname)
-  time  $(date -u +'%Y-%m-%d %H:%M UTC')
-  log   ${LOG}
-
-$(printf '%s\n' "${out}" | tail -25)"
+        record sweep-failed "${MODE}: itd run exited ${rc}; nothing checked this cycle" \
+            "$(printf '%s\n' "${out}" | grep -vE '^INFO' | tail -12)"
         ;;
 esac
 

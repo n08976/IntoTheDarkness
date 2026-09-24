@@ -44,3 +44,16 @@ def test_web_channel_runs_the_deploy_command_after_a_push(settings, tmp_path):
         ["git", "-C", str(bare), "log", "--oneline"], capture_output=True, text=True
     )
     assert "Report" in log.stdout                                   # and the push happened
+
+
+def test_page_carries_a_diagnostics_section_and_flags_open_issues(settings, tmp_path):
+    from intothedarkness import diag
+
+    settings.site_dir = tmp_path / "site"
+    settings.site_dir.mkdir()
+    settings.site_push = False
+    settings.issues_file = tmp_path / "issues.jsonl"
+    diag.record(settings.issues_file, "tor-down", "Tor could not be rebuilt")
+    get_notifier("web", settings).send(Message(subject="s", text="t", html="<p>x</p>"))
+    page = (settings.site_dir / "index.html").read_text()
+    assert 'id="diagnostics"' in page and "1 open issue(s)" in page and "tor-down" in page
