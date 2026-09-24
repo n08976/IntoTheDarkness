@@ -65,3 +65,5 @@ ignore_missing_imports = true
 "src/intothedarkness/cli.py" = ["B008"]
 # Verbatim Telegram posts as test fixtures; wrapping them would falsify the sample.
 "tests/test_ctiwatch.py" = ["E501"]
+# Inline HTML/CSS templates; wrapping them would break nothing but reads worse.
+"src/intothedarkness/notify/web.py" = ["E501"]

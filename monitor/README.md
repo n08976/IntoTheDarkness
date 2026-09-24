@@ -618,7 +618,7 @@ adds `email` cannot quietly send something you asked only to preview.
 
 ## Alerting
 
-Channels: `console`, `preview`, `resend`, `email`, `webhook`.
+Channels: `console`, `preview`, `resend`, `email`, `webhook`, `web`.
 
 **Resend is the recommended path** — an HTTPS API call, so no STARTTLS
 negotiation and none of the certificate-name traps that make shared-hosting SMTP
@@ -653,6 +653,17 @@ The same finding will not alert twice within `ITD_ALERT_COOLDOWN_MINUTES`
 (default 24 hours) instead. A `changed` finding folds content into its dedupe
 key, so a page that keeps changing keeps alerting; a stable new item alerts
 once.
+
+### The report as a web page
+
+The `web` channel publishes the same report as a page: written into a git
+checkout (`ITD_SITE_DIR`) as `index.html`, with a dated copy under `reports/`
+and an index of them, then committed and pushed (`ITD_SITE_PUSH`) so the host
+deploys it — cPanel's Git Version Control runs the checkout's `.cpanel.yml` on
+every push. The page carries no product name and nothing about who runs it,
+only the results, and links are de-fanged by default (`ITD_SITE_DEFANG`)
+because the page is public. `ITD_SITE_KEEP_REPORTS` (400) bounds the archive
+until a database takes over history.
 
 ### Links that survive a mail gateway
 
@@ -737,6 +748,10 @@ ignores punctuation and corporate suffixes (`Inc`, `LLC`, `Ltd`, `GmbH`).
   anywhere — but the headline must also carry an incident word (breach,
   ransomware, leak, attack, exposed, stolen, …), and a single-word vendor must
   be at least five letters. Measured against 472 headlines: 3 matches.
+- Names that are also simply news — the largest platforms — are kept out of
+  headline matching by `ITD_WATCHLIST_HEADLINE_EXCLUDE` (default Microsoft,
+  Google, Cisco, Adobe) while still matching on leak sites and in SEC filings,
+  where a match is unambiguous.
 - The same rules are applied backwards over everything observed in the window,
   so a vendor added today surfaces last week's listing tomorrow — including
   listings the rules ignored at the time, which exist only as observations.
@@ -853,6 +868,7 @@ src/intothedarkness/
   storage/          db.py, repository.py (diffing), snapshots.py (retention)
   alerting/         rules.py
   notify/           resend.py, email.py, webhook.py, console.py, preview.py,
+                    web.py (the report as a pushed web page),
                     render.py, dates.py (provenance), links.py (merging),
                     defang.py (per-recipient URL rewriting)
   investigations/   case.py

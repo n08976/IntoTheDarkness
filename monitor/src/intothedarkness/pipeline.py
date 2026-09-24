@@ -316,7 +316,10 @@ class Pipeline:
             f for f in findings
             if f.kind in (FindingKind.NEW, FindingKind.CHANGED, FindingKind.BASELINE)
         ]
-        hits = watchlist.find_matches(vendors, eligible, self._headline_targets(tags_by_target))
+        hits = watchlist.find_matches(
+            vendors, eligible, self._headline_targets(tags_by_target),
+            self.settings.watchlist_headline_exclude,
+        )
         # A source that maps names to vendors itself (SEC filers) says so on
         # the item; take its word rather than re-matching the filer's title.
         by_name = {v.name: v for v in vendors}
@@ -347,7 +350,9 @@ class Pipeline:
         for f in entries:
             if f.item is None or f.item.fields.get("watchlist"):
                 continue
-            hit = watchlist.find_matches(vendors, [f], heads).get(0)
+            hit = watchlist.find_matches(
+                vendors, [f], heads, self.settings.watchlist_headline_exclude
+            ).get(0)
             if hit is not None:
                 f.item.fields["watchlist"] = hit.name
 
@@ -367,7 +372,9 @@ class Pipeline:
             key = f.item.title.strip().lower()
             if key in known:
                 continue
-            vendor = watchlist.find_matches(vendors, [f], heads).get(0)
+            vendor = watchlist.find_matches(
+                vendors, [f], heads, self.settings.watchlist_headline_exclude
+            ).get(0)
             if vendor is None:
                 continue
             f.item.fields["watchlist"] = vendor.name

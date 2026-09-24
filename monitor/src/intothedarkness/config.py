@@ -128,6 +128,15 @@ class Settings(BaseSettings):
     # How often the wrapper runs a watchlist-only sweep between the scheduled
     # reports. Read by deploy/monitor-run.sh; cron fires every 15 minutes.
     watchlist_interval_minutes: int = 60
+    # Vendors kept out of headline matching (still matched on leak sites and
+    # in SEC filings, where a match is unambiguous): the biggest platforms
+    # are also simply news, and "Microsoft" beside "stolen" reads as an
+    # incident whether Microsoft is the victim or the one shutting it down.
+    watchlist_headline_exclude: list[str] = Field(
+        default_factory=lambda: [
+            "Microsoft", "Google", "Cisco Systems", "Cisco", "Adobe Inc", "Adobe",
+        ]
+    )
     # Targets carrying any of these tags are news: their titles are headlines,
     # so a vendor counts when it is mentioned alongside an incident word,
     # rather than when the title *is* the vendor as on a leak site.
@@ -138,6 +147,15 @@ class Settings(BaseSettings):
     sec_user_agent: str = ""
     sec_window_days: int = 90
     sec_refresh_minutes: int = 240
+
+    # Publish the same report as a web page: written into a git checkout and
+    # pushed, so the host deploys it. Links are de-fanged on the page by
+    # default -- it is public, and live .onion links on a public page invite
+    # more than an inbox does.
+    site_dir: Path | None = None
+    site_push: bool = True
+    site_defang: bool = True
+    site_keep_reports: int = 400
 
     # Generic webhook sink
     webhook_url: str = ""

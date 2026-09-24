@@ -81,3 +81,20 @@ def test_find_matches_uses_headline_mode_only_for_news_targets():
     hits = find_matches(vendors, findings, headline_targets={"news-x"})
     assert {i: v.name for i, v in hits.items()} == {
         0: "Fresenius Medical Care", 2: "Fresenius Medical Care"}
+
+
+def test_excluded_vendors_are_skipped_in_headlines_but_not_on_leak_sites():
+    vendors = parse("Microsoft\nBeckman Coulter\n")
+
+    def f(target, title):
+        return Finding(kind=FindingKind.NEW, target=target,
+                       item=Item(key=title, target=target, title=title))
+
+    findings = [
+        f("news-x", "Microsoft Confirms Breach of Support Systems"),     # excluded in headlines
+        f("dls-x", "Microsoft"),                                          # leak-site listing counts
+        f("news-x", "Hackers Leak Beckman Coulter Files"),               # not excluded
+    ]
+    hits = find_matches(vendors, findings, headline_targets={"news-x"},
+                        headline_exclude=["Microsoft"])
+    assert {i: v.name for i, v in hits.items()} == {1: "Microsoft", 2: "Beckman Coulter"}

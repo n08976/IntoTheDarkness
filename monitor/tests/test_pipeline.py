@@ -481,7 +481,9 @@ def test_watchlist_only_sweep_persists_nothing_and_respects_cooldown(settings, r
 def test_news_headlines_feed_the_watchlist_only_when_they_describe_an_incident(
     settings, repo, tmp_path
 ):
-    _with_watchlist(settings, tmp_path, "Microsoft\n")
+    # Beckman Coulter, not Microsoft: the biggest platform names are excluded
+    # from headline matching by default because they are also simply news.
+    _with_watchlist(settings, tmp_path, "Beckman Coulter\n")
     CHANNELS["inbox"] = InboxNotifier
     InboxNotifier.sent = []
     try:
@@ -489,14 +491,14 @@ def test_news_headlines_feed_the_watchlist_only_when_they_describe_an_incident(
         news = target(name="news-x", tags=["news"], channels=[])
         FEED[:] = [("a", "Alpha")]
         p.run([news])
-        FEED[:] = [("a", "Alpha"), ("b", "Microsoft Ships a New Excel Feature")]
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter Ships a New Analyzer")]
         report = p.run([news])
         assert report.watchlist == [] and InboxNotifier.sent == []      # no incident: not a match
-        FEED[:] = [("a", "Alpha"), ("b", "Microsoft Ships a New Excel Feature"),
-                   ("c", "Microsoft Confirms Breach of Support Systems")]
+        FEED[:] = [("a", "Alpha"), ("b", "Beckman Coulter Ships a New Analyzer"),
+                   ("c", "Beckman Coulter Confirms Breach of Support Systems")]
         report = p.run([news])
         assert [f.item.key for f in report.watchlist] == ["c"]
-        assert InboxNotifier.sent[-1].subject == "[URGENT] Vendor on leak site: Microsoft"
+        assert InboxNotifier.sent[-1].subject == "[URGENT] Vendor on leak site: Beckman Coulter"
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []

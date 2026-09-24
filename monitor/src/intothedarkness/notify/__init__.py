@@ -12,6 +12,7 @@ from .render import (
     render_text,
 )
 from .resend import ResendNotifier
+from .web import WebNotifier
 from .webhook import WebhookNotifier
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "PreviewNotifier",
     "ResendNotifier",
     "Notifier",
+    "WebNotifier",
     "WebhookNotifier",
     "available",
     "get_notifier",

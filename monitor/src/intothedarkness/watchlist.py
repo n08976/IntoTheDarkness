@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -149,18 +150,24 @@ def find_matches(
     vendors: list[Vendor],
     findings: list[Finding],
     headline_targets: set[str] | None = None,
+    headline_exclude: Sequence[str] = (),
 ) -> dict[int, Vendor]:
     """index of finding -> the vendor it names.
 
     Findings from ``headline_targets`` are news: their titles are sentences,
     matched by mention plus an incident word rather than as victim names.
+    Vendors in ``headline_exclude`` are never matched that way -- they are
+    the names that are also simply news.
     """
     hits: dict[int, Vendor] = {}
     heads = headline_targets or set()
+    excluded = {normalise(n) for n in headline_exclude}
     for i, f in enumerate(findings):
         title = f.item.title if f.item else ""
         as_headline = f.target in heads
         for vendor in vendors:
+            if as_headline and any(form in excluded for form in vendor.forms):
+                continue
             hit = mentioned_in(vendor, title) if as_headline else vendor.matches(title)
             if hit:
                 hits[i] = vendor
