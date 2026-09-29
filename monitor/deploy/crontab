@@ -4,8 +4,8 @@
 #     (crontab -l; cat deploy/crontab) | crontab -
 # Then verify:  crontab -l
 #
-# Full sweeps run hourly 07:00-22:00 US Eastern on weekdays and every four
-# hours in the same window (07, 11, 15, 19) at weekends. The 07:00 sweep
+# Full sweeps run every two hours 07:00-21:00 US Eastern on weekdays (07, 09,
+# 11, 13, 15, 17, 19, 21) and every four hours (07, 11, 15, 19) at weekends. The 07:00 sweep
 # always mails the full report, even with nothing new (ITD_DIGEST_HOURS);
 # the others mail only when there is something to say.
 #

@@ -684,7 +684,7 @@ follows daylight saving on its own (Ubuntu's cron has no `CRON_TZ`).
 
 | Tick | Weekdays | Weekends | What runs |
 |---|---|---|---|
-| `:00` of a sweep hour | every hour 07:00–22:00 | 07, 11, 15, 19 | **full sweep**: every source, findings recorded, report mailed if there is anything to say |
+| `:00` of a sweep hour | every two hours 07:00–21:00 (07, 09, 11, 13, 15, 17, 19, 21) | 07, 11, 15, 19 | **full sweep**: every source, findings recorded, report mailed if there is anything to say |
 | `:00` of the digest hour | 07:00 | 07:00 | full sweep, and the report is mailed **even with nothing new** — proof of life |
 | any other tick | — | — | **watchlist-only sweep** every `ITD_WATCHLIST_INTERVAL_MINUTES` (default 60): every source scraped, nothing persisted, only watchlist vendors alert |
 
@@ -816,7 +816,7 @@ A hit is a watchlist match like any other: mailed at once as
 `[URGENT] Vendor 8-K cyber filing: <vendor>`, and at the top of every report,
 linking to the filing itself. Settings: `ITD_SEC_USER_AGENT` (EDGAR requires
 a contact), `ITD_SEC_WINDOW_DAYS` (90), `ITD_SEC_REFRESH_MINUTES` (240; the
-ticker list and each filer's feed are cached, so hourly sweeps cost nothing
+ticker list and each filer's feed are cached, so repeated sweeps cost nothing
 between refreshes and stay far inside EDGAR's ten-requests-a-second limit).
 
 **Sector** is resolved in order of strength of evidence, and the provenance is

@@ -31,11 +31,11 @@ CONTROL_PORT=9051
 # which is a needlessly legible pattern. Set ITD_JITTER_SECONDS=0 to disable.
 JITTER="${ITD_JITTER_SECONDS:-240}"
 
-# Sweep hours, in US Eastern wall-clock time: hourly 07-22 on weekdays,
-# every four hours in the same window at weekends. ITD_RUN_HOURS, if set,
+# Sweep hours, in US Eastern wall-clock time: every two hours 07-21 on
+# weekdays, every four hours 07-19 at weekends. ITD_RUN_HOURS, if set,
 # overrides both.
 SCHEDULE_TZ="America/New_York"
-WEEKDAY_HOURS="${ITD_RUN_HOURS_WEEKDAY:-07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22}"
+WEEKDAY_HOURS="${ITD_RUN_HOURS_WEEKDAY:-07 09 11 13 15 17 19 21}"
 WEEKEND_HOURS="${ITD_RUN_HOURS_WEEKEND:-07 11 15 19}"
 if [ -n "${ITD_RUN_HOURS:-}" ]; then
     RUN_HOURS="${ITD_RUN_HOURS}"
