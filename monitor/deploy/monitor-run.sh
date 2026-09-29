@@ -13,6 +13,13 @@
 # not mailed: the machine heals what it can and keeps the record.
 set -uo pipefail
 
+# The whole script sits in one brace group so bash parses it completely before
+# running a line of it. Bash otherwise reads a script as it goes, and editing
+# this file while a sweep is in progress once made the running copy resume at
+# a shifted offset -- a syntax error at the end of a cycle whose results were
+# never logged. Replace the file atomically anyway (write, then mv).
+{
+
 PROJECT="${ITD_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 VENV="${ITD_VENV_BIN:-${PROJECT}/.venv/bin}"
 LOG="${PROJECT}/data/monitor.log"
@@ -170,3 +177,4 @@ esac
 
 log "--- ${MODE} finished (exit ${rc})"
 exit "${rc}"
+}
