@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from jinja2 import Environment, select_autoescape
 from markupsafe import Markup
@@ -131,15 +132,44 @@ def _is_filing(f: Finding) -> bool:
     return bool(f.item and str(f.item.fields.get("form", "")).startswith("8-K"))
 
 
+def _is_recent(f: Finding, days: int, now: datetime) -> bool:
+    """Within `days` of now by the date the reader sees (see dates.sort_key)."""
+    if days <= 0:
+        return True
+    when = stamp_for(f).when or f.created_at
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when >= now - timedelta(days=days)
+
+
 def _split_vendor_victims(
     entries: Sequence[Finding],
+    max_age_days: int = 0,
+    now: datetime | None = None,
 ) -> tuple[list[Finding], list[Finding], list[Finding]]:
-    """(vendor victims, vendor SEC filings, everything else)."""
+    """(vendor victims, vendor SEC filings, everything else).
+
+    The two priority sections are for what is current. A vendor listing or a
+    filing older than `max_age_days` ages out into the general sections --
+    still marked as a vendor or an 8-K, so the history keeps saying what it
+    was, but no longer at the top of a report about this week.
+    """
+    now = now or datetime.now(UTC)
     hit = [f for f in entries if f.item and f.item.fields.get("watchlist")]
     rest = [f for f in entries if not (f.item and f.item.fields.get("watchlist"))]
+    aged = [f for f in hit if not _is_recent(f, max_age_days, now)]
+    hit = [f for f in hit if _is_recent(f, max_age_days, now)]
     filings = [f for f in hit if _is_filing(f)]
     victims = [f for f in hit if not _is_filing(f)]
-    return victims, filings, rest
+    return victims, filings, rest + aged
+
+
+def _watch_tag(f: Finding) -> str:
+    """How an aged-out vendor entry says what it is, in the general sections."""
+    if not (f.item and f.item.fields.get("watchlist")):
+        return ""
+    kind = "SEC 8-K" if _is_filing(f) else "VENDOR"
+    return f"   [{kind}: {f.item.fields['watchlist']}]"
 
 
 def _filing_line(f: Finding) -> str:
@@ -175,7 +205,12 @@ def _carried(findings: Sequence[Finding], carry: Sequence[str]) -> tuple[list[Fi
     if not carry:
         return list(findings), 0
     keep = {c.lower() for c in carry}
-    kept = [f for f in findings if _sector_of(f).lower() in keep]
+    # An aged-out vendor entry stays listed whatever its sector: it was a
+    # priority once and the history should still show it, marked.
+    kept = [
+        f for f in findings
+        if _sector_of(f).lower() in keep or (f.item and f.item.fields.get("watchlist"))
+    ]
     return kept, len(findings) - len(kept)
 
 
@@ -187,9 +222,12 @@ def render_digest_text(
     window_days: int = 60,
     priority: Sequence[str] = ("healthcare",),
     carry: Sequence[str] = ("healthcare",),
+    priority_days: int = 10,
+    now: datetime | None = None,
 ) -> str:
     """The full running list, with anything new since the last report first."""
-    vendors, filings, entries = _split_vendor_victims(entries)
+    vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
+    recent = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running, uncarried = _carried(
         [f for f in entries if not (f.item and f.item.key in new_keys)], carry
@@ -210,7 +248,7 @@ def render_digest_text(
     # leak site. Listed once, here, and not again below.
     if vendors:
         lines += [
-            "!!  VENDOR VICTIMS — PRIORITY WATCHLIST (" + str(len(vendors)) + ")",
+            f"!!  VENDOR VICTIMS — PRIORITY WATCHLIST{recent} ({len(vendors)})",
             "!!" + "=" * 44,
             "",
         ]
@@ -227,7 +265,7 @@ def render_digest_text(
     # Directly beneath: vendors that told the SEC about a cyber incident.
     if filings:
         lines += [
-            "!!  SEC 8-K CYBER FILINGS — WATCHLIST VENDORS (" + str(len(filings)) + ")",
+            f"!!  SEC 8-K CYBER FILINGS — WATCHLIST VENDORS{recent} ({len(filings)})",
             "!!" + "=" * 44,
             "",
         ]
@@ -249,7 +287,10 @@ def render_digest_text(
             "",
         ]
         for f in _priority_first(new, priority):
-            lines.append(f"  * [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
+            lines.append(
+                f"  * [{_sector_of(f)}] {f.item.summary() if f.item else f.message}"
+                + _watch_tag(f)
+            )
             lines += _links(f)
         lines.append("")
     else:
@@ -262,7 +303,10 @@ def render_digest_text(
         "",
     ]
     for f in _newest_first(running):
-        lines.append(f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}")
+        lines.append(
+            f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}"
+            + _watch_tag(f)
+        )
         lines += _links(f)
     if uncarried:
         lines.append(f"  … plus {uncarried} entries in other sectors, not listed.")
@@ -377,9 +421,11 @@ _DIGEST_HTML = _env.from_string(
               margin-bottom:24px;background:#fffbeb">
     <h2 style="font-size:16px;margin:12px 0 4px;color:#92400e;text-transform:uppercase;
                letter-spacing:.04em">
-      &#9888; Vendor victims — priority watchlist ({{ vendors|length }})</h2>
+      &#9888; Vendor victims — priority watchlist{{ recent }} ({{ vendors|length }})</h2>
     <p style="margin:0 0 8px;color:#92400e;font-size:12px">
-      Vendors you depend on, named on a leak site. Listed here and nowhere else in this report.</p>
+      Vendors you depend on, named on a leak site. Listed here and nowhere else in this
+      report{% if priority_days > 0 %}; after {{ priority_days }} days an entry moves to the
+      sections below, still marked <strong>VENDOR</strong>{% endif %}.</p>
     <ul style="margin:8px 0 0;padding-left:18px">
       {% for f in vendors %}{{ entry(f) }}{% endfor %}
     </ul>
@@ -391,10 +437,12 @@ _DIGEST_HTML = _env.from_string(
               margin-bottom:24px;background:#eff6ff">
     <h2 style="font-size:16px;margin:12px 0 4px;color:#1e3a8a;text-transform:uppercase;
                letter-spacing:.04em">
-      &#9878; SEC 8-K cyber filings — watchlist vendors ({{ filings|length }})</h2>
+      &#9878; SEC 8-K cyber filings — watchlist vendors{{ recent }} ({{ filings|length }})</h2>
     <p style="margin:0 0 8px;color:#1e3a8a;font-size:12px">
       Vendors that disclosed a cybersecurity incident to the SEC. Item 1.05 is a material
-      incident by the company's own determination; 8.01 is incident wording under other events.</p>
+      incident by the company's own determination; 8.01 is incident wording under other
+      events{% if priority_days > 0 %}; after {{ priority_days }} days a filing moves to the
+      sections below, still marked <strong>SEC 8-K</strong>{% endif %}.</p>
     <ul style="margin:8px 0 0;padding-left:18px">
       {% for f in filings %}{{ entry(f) }}{% endfor %}
     </ul>
@@ -439,6 +487,7 @@ _ENTRY = _env.from_string(
   <strong>{{ f.item.summary() if f.item else f.message }}</strong>
   {%- if f.item and f.item.fields.get('watchlist') %}
   <span style="font-size:11px;color:#92400e;font-weight:600;margin-left:6px">
+    {{ 'SEC 8-K' if f.item.fields.get('form') else 'VENDOR' }} ·
     vendor: {{ f.item.fields['watchlist'] }}
     {%- if f.item.fields.get('group') %} · by {{ f.item.fields['group'] }}{% endif %}
     {%- if f.item.fields.get('form') %} · {{ f.item.fields['form'] }}
@@ -480,10 +529,12 @@ def render_digest_html(
     window_days: int = 60,
     priority: Sequence[str] = ("healthcare",),
     carry: Sequence[str] = ("healthcare",),
+    priority_days: int = 10,
+    now: datetime | None = None,
 ) -> str:
     from ..models import utcnow
 
-    vendors, filings, entries = _split_vendor_victims(entries)
+    vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running, uncarried = _carried(
         [f for f in entries if not (f.item and f.item.key in new_keys)], carry
@@ -497,6 +548,8 @@ def render_digest_html(
         uncarried=uncarried,
         carried=", ".join(carry) if carry else "all sectors",
         priority_label=", ".join(priority),
+        priority_days=priority_days,
+        recent=f", last {priority_days} days" if priority_days > 0 else "",
         # The entry is already-rendered HTML. Without Markup, autoescape on
         # the outer template turns every <li> into literal text in the mail.
         entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for, sector=_sector_of(f))),

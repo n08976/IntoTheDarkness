@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     # email anyone reads. Empty digest_sectors means carry everything.
     priority_sectors: list[str] = Field(default_factory=lambda: ["healthcare"])
     digest_sectors: list[str] = Field(default_factory=lambda: ["healthcare"])
+    # The vendor-victim and SEC 8-K sections at the top of the report hold
+    # only entries this many days old or newer; older ones age out into the
+    # general sections, still marked as vendor or 8-K. 0 keeps them on top
+    # for the whole window.
+    priority_days: int = 10
 
     # Priority watchlist: vendor names whose appearance anywhere is urgent.
     # The list is edited in the git repository and pushed; this box has no

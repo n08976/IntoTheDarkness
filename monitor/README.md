@@ -723,14 +723,22 @@ the next report.
 
 Every emailed report has the same shape, top to bottom:
 
-1. **Vendor victims — priority watchlist.** Any victim, in any sector, from any
-   source, whose name matches `watchlist/vendors.txt`. These are also mailed
-   the moment they are found, subject `[URGENT] Vendor on leak site: <name>`,
-   marked critical, outside the report schedule.
-2. **SEC 8-K cyber filings — watchlist vendors.** Vendors that disclosed a
-   cybersecurity incident to the SEC (Item 1.05, or incident wording under
-   Item 8.01), each linking to the filing. Found by the EDGAR route described
-   below; mailed at once as `[URGENT] Vendor 8-K cyber filing: <name>`.
+1. **Vendor victims — priority watchlist, last 10 days.** Any victim, in any
+   sector, from any source, whose name matches `watchlist/vendors.txt`. These
+   are also mailed the moment they are found, subject `[URGENT] Vendor on leak
+   site: <name>`, marked critical, outside the report schedule.
+2. **SEC 8-K cyber filings — watchlist vendors, last 10 days.** Vendors that
+   disclosed a cybersecurity incident to the SEC (Item 1.05, or incident
+   wording under Item 8.01), each linking to the filing. Found by the EDGAR
+   route described below; mailed at once as `[URGENT] Vendor 8-K cyber filing:
+   <name>`.
+
+   Both boxes hold only entries dated within `ITD_PRIORITY_DAYS` (default 10)
+   by the date shown on the entry. Older ones **age out** into the sections
+   below, where they stay listed whatever their sector and are marked
+   `[VENDOR: <name>]` or `[SEC 8-K: <name>]`, so the history still says what
+   they were without the top of a report about this week carrying last
+   month's. `0` keeps them on top for the whole window.
 3. **New since the last report** — every sector, with the priority sectors
    (`ITD_PRIORITY_SECTORS`, default healthcare) listed first, then the rest,
    newest first within each.

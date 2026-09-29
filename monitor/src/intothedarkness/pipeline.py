@@ -499,10 +499,12 @@ class Pipeline:
         text = render_digest_text(
             entries, new_keys, status=status, window_days=s.digest_days,
             priority=s.priority_sectors, carry=s.digest_sectors,
+            priority_days=s.priority_days,
         )
         html = render_digest_html(
             entries, new_keys, status=status, window_days=s.digest_days,
             priority=s.priority_sectors, carry=s.digest_sectors,
+            priority_days=s.priority_days,
         )
         return Message(subject=subject, text=text, html=html, findings=group)
 

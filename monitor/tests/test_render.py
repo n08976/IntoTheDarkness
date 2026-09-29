@@ -102,11 +102,12 @@ def test_vendor_victims_lead_the_report_and_are_not_repeated_below():
         f("b", "Beckman Coulter, Inc", sector="healthcare",
           watchlist="Beckman Coulter", group="metaencryptor"),
     ]
-    text = render_digest_text(entries, {"a", "b"})
+    now = datetime(2026, 9, 24, tzinfo=UTC)
+    text = render_digest_text(entries, {"a", "b"}, now=now)
     assert text.index("VENDOR VICTIMS") < text.index("NEW SINCE LAST REPORT")
     assert text.count("Beckman Coulter, Inc") == 1                 # once, at the top
     assert "[vendor: Beckman Coulter]" in text and "by metaencryptor" in text
-    html = render_digest_html(entries, {"a", "b"})
+    html = render_digest_html(entries, {"a", "b"}, now=now)
     assert html.index("Vendor victims") < html.index("New since last report")
     assert html.count("Beckman Coulter, Inc") == 1
 
@@ -153,7 +154,8 @@ def test_vendor_sec_filings_get_their_own_section_beneath_vendor_victims():
           items="1.05", published="2026-09-08", status="Item 1.05"),
         f("c", "agg-x", "Textile City", sector="manufacturing"),
     ]
-    text = render_digest_text(entries, {"c"})
+    now = datetime(2026, 9, 15, tzinfo=UTC)          # the filing is a week old
+    text = render_digest_text(entries, {"c"}, now=now)
     marks = ("VENDOR VICTIMS", "SEC 8-K CYBER FILINGS", "DISCOVERED IN")
     i_v, i_f, i_d = (text.index(k) for k in marks)
     assert i_v < i_f < i_d
@@ -161,8 +163,61 @@ def test_vendor_sec_filings_get_their_own_section_beneath_vendor_victims():
     assert "Beckman Coulter, Inc" in victims and "BOSTON SCIENTIFIC" not in victims   # not mixed in
     assert "8-K items 1.05 filed 2026-09-08 — Item 1.05" in text
     assert text.count("BOSTON SCIENTIFIC CORP") == 1
-    html = render_digest_html(entries, {"c"})
+    html = render_digest_html(entries, {"c"}, now=now)
     marks = ("Vendor victims", "SEC 8-K cyber filings", "New since")
     h_v, h_f, h_n = (html.index(k) for k in marks)
     assert h_v < h_f < h_n
     assert html.count("BOSTON SCIENTIFIC CORP") == 1 and "filed 2026-09-08" in html
+
+
+def test_vendor_entries_older_than_the_priority_window_age_out_marked():
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    now = datetime(2026, 9, 29, 12, tzinfo=UTC)
+
+    def f(key, target, title, **fields):
+        item = Item(key=key, target=target, title=title, fields=fields)
+        return Finding(kind=FindingKind.NEW, target=target, item=item, created_at=now)
+
+    entries = [
+        # 4 days old: stays on top
+        f("a", "agg-x", "Beckman Coulter, Inc", watchlist="Beckman Coulter",
+          sector="healthcare", published="2026-09-25"),
+        # 40 days old, and not a carried sector: ages out yet stays listed, marked
+        f("b", "agg-x", "Olympus Corporation", watchlist="Olympus Corporation",
+          sector="manufacturing", published="2026-08-20"),
+        # a filing 6 weeks old ages out of its box the same way
+        f("c", "sec-8k", "BOSTON SCIENTIFIC CORP", watchlist="Boston Scientific",
+          form="8-K", items="1.05", published="2026-08-15", status="Item 1.05"),
+        # an aged vendor entry that is new this run goes in the NEW section
+        f("d", "dls-y", "Cytek Biosciences", watchlist="Cytek Biosciences",
+          sector="healthcare", published="2026-08-01"),
+        f("e", "agg-x", "Textile City", sector="manufacturing", published="2026-09-28"),
+    ]
+    text = render_digest_text(entries, {"d", "e"}, priority_days=10, now=now)
+    top = text.split("NEW SINCE LAST REPORT", 1)[0]
+    assert "LAST 10 DAYS" in top and "Beckman Coulter, Inc" in top
+    for aged in ("Olympus Corporation", "BOSTON SCIENTIFIC", "Cytek"):
+        assert aged not in top
+    assert "SEC 8-K CYBER FILINGS" not in text                     # box empty, so absent
+    new, running = text.split("NEW SINCE LAST REPORT", 1)[1].split("DISCOVERED IN", 1)
+    assert "Cytek Biosciences   [VENDOR: Cytek Biosciences]" in new
+    assert "Olympus Corporation   [VENDOR: Olympus Corporation]" in running
+    assert "BOSTON SCIENTIFIC CORP   [SEC 8-K: Boston Scientific]" in running
+    assert "Textile City" not in running and "plus 0" not in text  # carry rule still applies
+    assert text.count("Beckman Coulter, Inc") == 1
+
+    html = render_digest_html(entries, {"d", "e"}, priority_days=10, now=now)
+    assert "last 10 days" in html
+    assert "SEC 8-K ·\n    vendor: Boston Scientific" in html
+    assert "VENDOR ·\n    vendor: Olympus Corporation" in html
+    assert html.index("Beckman Coulter, Inc") < html.index("New since last report")
+    assert html.index("Olympus Corporation") > html.index("Discovered in the last")
+
+    # 0 keeps the old behaviour: everything vendor-flagged stays on top
+    text0 = render_digest_text(entries, {"d", "e"}, priority_days=0, now=now)
+    top0 = text0.split("NEW SINCE LAST REPORT", 1)[0]
+    assert "Olympus Corporation" in top0 and "BOSTON SCIENTIFIC" in top0
