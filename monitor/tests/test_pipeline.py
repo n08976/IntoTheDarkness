@@ -202,6 +202,23 @@ def test_notifier_failure_is_reported_and_leaves_no_cooldown(settings, repo):
     assert repo.recently_alerted(key, 60) is False   # so the next run retries
 
 
+def test_a_failed_site_publish_is_an_open_issue(settings, repo):
+    from intothedarkness import diag
+
+    # No site_dir configured: the web channel reports itself unavailable, which
+    # is the same path a timed-out push takes. The report cannot show the reader
+    # that the page is stale, so Diagnostics has to.
+    settings.site_dir = None
+    p = pipeline(settings, repo)
+    FEED[:] = [("a", "Alpha")]
+    p.run([target(channels=["web"])])
+    FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+    report = p.run([target(channels=["web"])])
+
+    assert "notify:web" in report.errors
+    assert [e.kind for e in diag.open_issues(diag.load(settings.issues_file))] == ["publish-failed"]
+
+
 def test_disabled_and_not_due_targets_are_skipped(settings, repo):
     p = pipeline(settings, repo)
     report = p.run([target(enabled=False)])

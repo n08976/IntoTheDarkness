@@ -102,6 +102,20 @@ healed=0
 if ! timeout 150 "${VENV}/itd" tor status >/dev/null 2>&1; then
     log "tor is not routing; rebuilding through meek bridges"
     timeout 60 "${VENV}/itd" tor down >/dev/null 2>&1
+    # After a reboot the distro's tor package (installed once, enabled by
+    # default) can come up on 9050 first. It never bootstraps on this network,
+    # our tor cannot bind, and "could not be rebuilt" hid that for two days.
+    # Name the squatter; it is not ours to kill from cron.
+    squatter="$(ss -H -ltnp "sport = :${SOCKS_PORT}" 2>/dev/null | head -1)"
+    if [ -n "${squatter}" ]; then
+        svc="$(systemctl is-active tor@default 2>/dev/null || true)"
+        log "FAIL port ${SOCKS_PORT} is held by another process -- no sweep this cycle"
+        record tor-port-conflict "Port ${SOCKS_PORT} is held by another process; Tor cannot be rebuilt" \
+"listener: ${squatter}
+system tor@default service: ${svc:-unknown}
+fix: sudo systemctl disable --now tor tor@default && sudo systemctl mask tor tor@default"
+        exit 1
+    fi
     if timeout 450 "${VENV}/itd" tor up --bridges meek \
             --socks-port "${SOCKS_PORT}" --control-port "${CONTROL_PORT}" \
             --timeout 400 >>"${LOG}" 2>&1 \

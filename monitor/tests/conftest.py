@@ -29,6 +29,7 @@ def settings(tmp_path) -> Settings:
         db_url=f"sqlite:///{tmp_path / 'test.db'}",
         targets_file=tmp_path / "targets.yaml",
         rules_file=tmp_path / "rules.yaml",
+        issues_file=tmp_path / "issues.jsonl",
         per_host_delay=0.0,
         respect_robots=False,
         alert_cooldown_minutes=60,

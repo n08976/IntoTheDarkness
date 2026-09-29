@@ -472,18 +472,12 @@ class ManagedTor:
                     line = lines.get(timeout=1.0)
                 except Empty:
                     if self.process.poll() is not None:
-                        raise TorLaunchError(
-                            f"tor exited with code {self.process.returncode}; "
-                            f"see {self.log_file}"
-                        ) from None
+                        raise TorLaunchError(self._exit_message()) from None
                     continue
 
                 if line is None:  # stdout closed
                     if self.process.poll() is not None:
-                        raise TorLaunchError(
-                            f"tor exited with code {self.process.returncode}; "
-                            f"see {self.log_file}"
-                        )
+                        raise TorLaunchError(self._exit_message())
                     break
 
                 log_handle.write(line)
@@ -509,6 +503,33 @@ class ManagedTor:
             "Stalling below 25% usually means the network blocks or throttles "
             "connections to Tor relays — configure bridges (ITD_TOR_BRIDGES)."
         )
+
+    def log_hints(self, limit: int = 3) -> list[str]:
+        """The last warn/err lines tor wrote, so a launch failure names its cause.
+
+        A tor that exits with code 1 has usually said why one line earlier --
+        "Could not bind to 127.0.0.1:9050: Address already in use" after a
+        reboot brought up a distro tor on the same port -- and "see the log"
+        left that reason in a file nobody opened for two days.
+        """
+        try:
+            lines = self.log_file.read_text(errors="replace").splitlines()
+        except OSError:
+            return []
+        hints = [ln for ln in lines if "[warn]" in ln or "[err]" in ln]
+        out = []
+        for ln in hints[-limit:]:
+            ln = re.sub(r"^\w{3} \d\d \d\d:\d\d:\d\d\.\d+ ", "", ln)
+            out.append(ln.strip())
+        return out
+
+    def _exit_message(self) -> str:
+        assert self.process is not None
+        msg = f"tor exited with code {self.process.returncode}; see {self.log_file}"
+        hints = self.log_hints()
+        if hints:
+            msg += "\n  " + "\n  ".join(hints)
+        return msg
 
     def stop(self) -> bool:
         """Stop a tor we started. Returns whether anything was stopped."""

@@ -315,3 +315,27 @@ def test_meek_bridges_use_the_lyrebird_transport_line(settings, monkeypatch):
     assert "meek_lite" in text
     assert "lyrebird" in text
     assert "ClientTransportPlugin snowflake" not in text   # not requested
+
+
+def test_launch_failure_quotes_the_reason_from_the_log(settings):
+    settings.ensure_dirs()
+    mgr = tm.ManagedTor(settings=settings)
+    mgr.state_dir.mkdir(parents=True, exist_ok=True)
+    mgr.log_file.write_text(
+        "Sep 29 13:04:20.407 [notice] Tor 0.4.9.11 running on Linux\n"
+        "Sep 29 13:04:20.409 [notice] Opening Socks listener on 127.0.0.1:9050\n"
+        "Sep 29 13:04:20.409 [warn] Could not bind to 127.0.0.1:9050: "
+        "Address already in use. Is Tor already running?\n"
+        "Sep 29 13:04:20.409 [warn] Failed to parse/validate config: "
+        "Failed to bind one of the listener ports.\n"
+        "Sep 29 13:04:20.409 [err] Reading config failed--see warnings above.\n"
+    )
+    hints = mgr.log_hints()
+    assert len(hints) == 3
+    assert hints[0].startswith("[warn] Could not bind to 127.0.0.1:9050: Address already in use")
+    assert hints[-1] == "[err] Reading config failed--see warnings above."
+
+
+def test_no_log_means_no_hints(settings):
+    settings.ensure_dirs()
+    assert tm.ManagedTor(settings=settings).log_hints() == []

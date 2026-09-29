@@ -702,9 +702,17 @@ found dead, Tor rebuilt, a sweep that failed or ran partial, a sweep that ran
 clean — is appended to `data/issues.jsonl` (`deploy/ops_log.py`) and shown in
 the site's **Diagnostics** section: open issues, the last clean sweep, recent
 events. An issue stays open until a later event resolves it (Tor down until Tor
-is rebuilt or any sweep completes; a failed sweep until a clean one).
-`itd diag` prints the same from the command line. The inbox carries findings
-only; silence means: ran, nothing new.
+is rebuilt or any sweep completes; a failed sweep until a clean one; a failed
+site publish until one succeeds). `itd diag` prints the same from the command
+line. The inbox carries findings only; silence means: ran, nothing new.
+
+One failure the rebuild cannot heal is recorded under its own name,
+`tor-port-conflict`: after a reboot, a distro `tor` package that happens to be
+installed comes up on 9050 first, never bootstraps on a throttled network, and
+leaves the managed Tor unable to bind. The event names the listener and the
+fix (`systemctl disable --now tor tor@default` and mask it); the machine does
+not run `sudo` from cron. A Tor launch failure also quotes the last warning
+lines from `tor.log` in the run log, so "exited with code 1" says why.
 
 A watchlist-only sweep persists nothing on purpose. The next full sweep still
 sees everything as new and reports it exactly as it would have; the only effect

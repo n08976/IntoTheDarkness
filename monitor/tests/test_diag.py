@@ -31,3 +31,21 @@ def test_a_torn_line_does_not_break_loading(tmp_path):
     diag.record(p, "sweep-ok", "clean")
     p.write_text(p.read_text() + '{"when": "2026-09-24T00:00:00+00:00", "kind": "sw')
     assert [e.kind for e in diag.load(p)] == ["sweep-ok"]
+
+
+def test_a_port_conflict_is_open_until_tor_comes_back(tmp_path):
+    p = tmp_path / "issues.jsonl"
+    diag.record(p, "tor-port-conflict", "Port 9050 is held by another process",
+                "listener: tor pid=1645")
+    assert [e.kind for e in diag.open_issues(diag.load(p))] == ["tor-port-conflict"]
+    diag.record(p, "tor-recovered", "rebuilt through meek")
+    assert diag.open_issues(diag.load(p)) == []
+
+
+def test_a_failed_publish_stays_open_until_a_good_one(tmp_path):
+    p = tmp_path / "issues.jsonl"
+    diag.record(p, "publish-failed", "Site publish failed", "git push: timed out")
+    diag.record(p, "sweep-ok", "12 target(s)")     # a clean sweep is not a good push
+    assert [e.kind for e in diag.open_issues(diag.load(p))] == ["publish-failed"]
+    diag.record(p, "publish-ok", "Site published")
+    assert diag.open_issues(diag.load(p)) == []

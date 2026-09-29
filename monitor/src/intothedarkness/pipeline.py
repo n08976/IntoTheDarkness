@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urljoin, urlparse
 
-from . import watchlist
+from . import diag, watchlist
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
 from .enrich import SectorClassifier, SectorIndex
@@ -570,6 +570,15 @@ class Pipeline:
             except Exception as exc:
                 log.error("channel %s failed: %s", channel, exc)
                 report.errors[f"notify:{channel}"] = str(exc)
+                if channel == "web" and not dry_run:
+                    # the site is the one channel whose failure the reader
+                    # cannot see from the report itself: name it in Diagnostics
+                    diag.record(
+                        self.settings.issues_file,
+                        "publish-failed",
+                        "Site publish failed; the page is stale until the next good push",
+                        str(exc)[:600],
+                    )
                 if not dry_run:
                     for finding in group:
                         self.repo.record_alert(
@@ -578,6 +587,8 @@ class Pipeline:
                 continue
 
             report.notified[channel] = report.notified.get(channel, 0) + len(group)
+            if channel == "web" and not dry_run:
+                diag.record(self.settings.issues_file, "publish-ok", "Site published")
             if not dry_run:
                 for finding in group:
                     self.repo.record_alert(finding.dedupe_key(), channel, ok=True)

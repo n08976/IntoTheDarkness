@@ -6,8 +6,9 @@ mailed. The reader's inbox holds findings; the site's Diagnostics section
 and `itd diag` hold the running state of the machine, and the log is the
 answer to "what happened" after the fact.
 
-An issue is open until a later event resolves it: Tor down until Tor is
-rebuilt or any sweep completes; a failed or partial sweep until a clean one.
+An issue is open until a later event resolves it: Tor down (or its port taken
+by another process) until Tor is rebuilt or any sweep completes; a failed or
+partial sweep until a clean one; a failed site publish until one succeeds.
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ from pathlib import Path
 RESOLVES: dict[str, set[str]] = {
     # an event of the key kind is resolved by any later event in the set
     "tor-down": {"tor-recovered", "sweep-ok", "sweep-partial"},
+    # another process holds the SOCKS port (a distro tor after a reboot, say):
+    # nothing the rebuild can do until the port is freed
+    "tor-port-conflict": {"tor-recovered", "sweep-ok", "sweep-partial"},
     "sweep-failed": {"sweep-ok"},
     "sweep-partial": {"sweep-ok"},
     "publish-failed": {"publish-ok"},
