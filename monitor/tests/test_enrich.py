@@ -212,6 +212,11 @@ def test_generated_sectors_template_matches_the_code_defaults():
         ("Agriculture and Food Production", "agriculture"),
         ("  HEALTHCARE  ", "healthcare"),
         ("healthcare", "healthcare"),
+        ("Medical Supplies", "healthcare"),
+        ("Medical Devices", "healthcare"),
+        ("Medical Technology", "healthcare"),
+        ("Biotechnology", "healthcare"),
+        ("Health Services", "healthcare"),
     ],
 )
 def test_upstream_labels_map_onto_our_vocabulary(label, expected):

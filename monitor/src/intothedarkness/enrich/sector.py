@@ -113,7 +113,15 @@ SECTOR_ALIASES: dict[str, str] = {
     "financial services": "finance", "finance": "finance", "banking": "finance",
     "insurance": "finance", "accounting": "finance",
     "healthcare": "healthcare", "health care": "healthcare",
+    "health services": "healthcare", "healthcare services": "healthcare",
     "medical": "healthcare", "pharmaceuticals": "healthcare",
+    # Leak sites label medical-device and supply firms many ways; a healthcare
+    # monitor wants every one of them under healthcare (Redact tags Hologic
+    # "Medical Supplies", for instance).
+    "medical supplies": "healthcare", "medical devices": "healthcare",
+    "medical device": "healthcare", "medical equipment": "healthcare",
+    "medical technology": "healthcare", "biotechnology": "healthcare",
+    "life sciences": "healthcare",
     "manufacturing": "manufacturing", "industrial": "manufacturing",
     "technology": "technology", "it services": "technology",
     "telecommunications": "technology", "software": "technology",
