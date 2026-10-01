@@ -791,7 +791,7 @@ Sources are of four kinds, and each is read the way it can be read:
 | Kind | Examples | How it is read |
 |---|---|---|
 | Clearnet aggregators | ransomware.live, ransomlook, Darkfield | JSON API or RSS feed, direct; their sector and operator labels are trusted as *upstream* facts |
-| Leak sites | Rhysida, Everest, DragonForce, Daixin | over Tor with meek bridges, victim cards extracted with per-site selectors (`itd targets suggest` derives them from a live fetch) |
+| Leak sites | Rhysida, Everest, DragonForce, Daixin, Orion, Wallstreet | over Tor with meek bridges; HTML victim cards via per-site selectors (`itd targets suggest` derives them from a live fetch), or the site's own JSON API where it has one (Wallstreet). Epoch timestamps from a JSON API are read as published dates. |
 | News | UnderCode | RSS, direct; headlines only feed the watchlist rule above and the healthcare-by-name rule |
 | Anything else | CTIWatch, LAPSUS$ | CTIWatch's site and API are Cloudflare-walled, key or no key, so its public Telegram channel preview is parsed instead; LAPSUS$ publishes statements, not a table, so the page is watched whole for change |
 | Regulatory filings | SEC EDGAR | 8-K filings by watchlist vendors that are SEC filers, kept only when they disclose a cyber incident (see below) |

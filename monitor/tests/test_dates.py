@@ -86,3 +86,15 @@ def test_rfc_2822_pubdate_from_an_rss_feed_is_parsed_and_labelled_published():
     stamp = stamp_for(finding(published="Sun, 20 Sep 2026 13:21:17 +0000"))
     assert (stamp.label, stamp.text) == (PUBLISHED, "2026-09-20 13:21 UTC")
     assert stamp.when is not None
+
+
+def test_epoch_timestamps_are_published_dates():
+    from intothedarkness.notify.dates import PUBLISHED, stamp_for
+
+    # Milliseconds (a browser-facing JSON API) and seconds both parse; the
+    # value is the moment, labelled published, not our clock.
+    for raw in ("1790700695819", "1790700695"):
+        st = stamp_for(finding(discovered=raw))
+        assert st.label == PUBLISHED and st.text == "2026-09-29 16:51 UTC"
+    # a short run of digits is not an epoch
+    assert stamp_for(finding(discovered="12345")).label != PUBLISHED

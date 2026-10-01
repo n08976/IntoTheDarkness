@@ -59,6 +59,11 @@ def _parse(raw: str) -> datetime | None:
     value = raw.strip()
     if not value:
         return None
+    # Unix epoch, seconds or milliseconds: what a JSON API hands over when
+    # it was built for a browser (Wallstreet's createdAt is 1790700695819).
+    if value.isdigit() and len(value) in (10, 13):
+        seconds = int(value) / (1000 if len(value) == 13 else 1)
+        return datetime.fromtimestamp(seconds, UTC)
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError:
@@ -101,7 +106,8 @@ def stamp_for(finding) -> Stamp:  # noqa: ANN001 - Finding, avoiding a circular 
         when = _parse(raw)
         if when is not None:
             # A bare date has no time of day; do not imply midnight precision.
-            had_time = any(sep in raw for sep in ("T", ":"))
+            # An epoch is a moment, so it always carries one.
+            had_time = any(sep in raw for sep in ("T", ":")) or raw.isdigit()
             return Stamp(PUBLISHED, _format(when, had_time), when)
         # Parsed nothing. Show what the site said, word for word.
         return Stamp(AS_REPORTED, raw, None)
