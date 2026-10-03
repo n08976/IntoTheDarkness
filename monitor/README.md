@@ -788,6 +788,9 @@ whether a given victim name would fire.
 
 Sources are of four kinds, and each is read the way it can be read:
 
+**Routing rule:** every `.onion` request goes through Tor and every clearnet request goes direct. `network: auto` (the default) resolves exactly that way; an explicit `network:` that contradicts the URL is rejected at config load, so a clearnet source can never be pinned to Tor nor a hidden service to a clearnet route.
+
+
 | Kind | Examples | How it is read |
 |---|---|---|
 | Clearnet aggregators | ransomware.live, ransomlook, Darkfield | JSON API or RSS feed, direct; their sector and operator labels are trusted as *upstream* facts |

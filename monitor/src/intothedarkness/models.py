@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def utcnow() -> datetime:
@@ -129,6 +129,31 @@ class Target(BaseModel):
         if v not in allowed:
             raise ValueError(f"network must be one of {sorted(allowed)}, got {v!r}")
         return v
+
+    @model_validator(mode="after")
+    def _route_matches_url(self) -> Target:
+        """Standing rule: clearnet goes direct, .onion goes through Tor.
+
+        ``auto`` already resolves that way; this blocks an explicit override that
+        would contradict it -- a clearnet host pinned to Tor (needless exposure
+        and the rate-limiting that follows) or a hidden service pinned to direct
+        (a clearnet DNS leak that cannot even resolve). A misconfigured target
+        fails at load with its name, not silently at fetch time.
+        """
+        from .tor import is_onion
+
+        onion = is_onion(self.url)
+        if self.network == "tor" and not onion:
+            raise ValueError(
+                f"target {self.name!r}: clearnet URL must not be routed through Tor "
+                f"(set network: direct or auto)"
+            )
+        if self.network == "direct" and onion:
+            raise ValueError(
+                f"target {self.name!r}: .onion URL must go through Tor "
+                f"(set network: tor or auto)"
+            )
+        return self
 
     @field_validator("content_mode")
     @classmethod

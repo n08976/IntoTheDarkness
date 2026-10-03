@@ -39,3 +39,26 @@ def test_summary_truncates():
     long = item(title="x" * 500)
     assert len(long.summary(80)) == 80
     assert long.summary(80).endswith("…")
+
+
+def test_clearnet_target_may_not_be_pinned_to_tor():
+    import pytest
+
+    from intothedarkness.models import Target
+
+    # auto and direct are fine for clearnet; tor is refused.
+    Target(name="x", url="https://x.com/i/api", network="auto")
+    Target(name="x", url="https://x.com/i/api", network="direct")
+    with pytest.raises(ValueError, match="clearnet URL must not be routed through Tor"):
+        Target(name="x", url="https://x.com/i/api", network="tor")
+
+
+def test_onion_target_may_not_be_pinned_to_direct():
+    import pytest
+
+    from intothedarkness.models import Target
+
+    Target(name="leak", url="http://abc.onion/", network="auto")
+    Target(name="leak", url="http://abc.onion/", network="tor")
+    with pytest.raises(ValueError, match=".onion URL must go through Tor"):
+        Target(name="leak", url="http://abc.onion/", network="direct")
