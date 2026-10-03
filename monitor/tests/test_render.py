@@ -221,3 +221,40 @@ def test_vendor_entries_older_than_the_priority_window_age_out_marked():
     text0 = render_digest_text(entries, {"d", "e"}, priority_days=0, now=now)
     top0 = text0.split("NEW SINCE LAST REPORT", 1)[0]
     assert "Olympus Corporation" in top0 and "BOSTON SCIENTIFIC" in top0
+
+
+def test_x_feed_posts_render_in_their_own_section_not_the_victim_lists():
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    now = datetime(2026, 10, 3, 14, tzinfo=UTC)
+
+    def f(key, target, title, **fields):
+        item = Item(key=key, target=target, title=title, url=fields.pop("url", ""), fields=fields)
+        return Finding(kind=FindingKind.NEW, target=target, item=item, created_at=now)
+
+    entries = [
+        f("x:1", "x-feeds", "qilin added a hospital to its leak site", source="x",
+          handle="vxunderground", sector="healthcare",
+          published="Fri Oct 03 13:00:00 +0000 2026", url="https://x.com/vxunderground/status/1"),
+        f("x:2", "x-feeds", "Acme Corp breach claimed", source="x", handle="FalconFeedsio",
+          watchlist="Acme Corp", published="Fri Oct 03 12:00:00 +0000 2026",
+          url="https://x.com/FalconFeedsio/status/2"),
+        f("v1", "dls-redact", "Hologic", watchlist="Hologic", sector="healthcare",
+          published="2026-10-01"),
+        f("n1", "agg-x", "Some Hospital", sector="healthcare", published="2026-10-02"),
+    ]
+    text = render_digest_text(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
+    assert "MONITORED X FEEDS" in text
+    assert text.index("MONITORED X FEEDS") < text.index("NEW SINCE LAST REPORT")
+    assert "@vxunderground" in text and "@FalconFeedsio" in text
+    # the two tweets are in the X section, not the vendor-victims section
+    vendor_block = text.split("MONITORED X FEEDS", 1)[0]
+    assert "vendor: Hologic" in vendor_block.lower() or "Hologic" in vendor_block
+    assert "FalconFeedsio" not in vendor_block        # the watchlist tweet is not a vendor victim
+
+    html = render_digest_html(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
+    assert "Monitored X feeds" in html and "@vxunderground" in html
+    assert html.index("Monitored X feeds") < html.index("New since last report")

@@ -31,6 +31,11 @@ from .storage import Repository, SnapshotStore, get_db
 log = logging.getLogger(__name__)
 
 
+def _is_social(finding) -> bool:  # noqa: ANN001 - Finding, avoiding a heavy import here
+    """A finding scraped from an X/Twitter feed (its own report section)."""
+    return bool(finding.item and finding.item.fields.get("source") == "x")
+
+
 @dataclass
 class RunReport:
     findings: list[Finding] = field(default_factory=list)
@@ -263,7 +268,9 @@ class Pipeline:
         urgent = self._watchlist_matches(report.findings, tags_by_target)
         report.watchlist = urgent
         if watchlist_only:
-            report.findings = list(urgent)
+            # Watchlist-only sweeps exist for leak-site vendor alerts; X feeds are
+            # delivered only in the regular report, never on this path.
+            report.findings = [f for f in urgent if not _is_social(f)]
         else:
             rest = [f for f in report.findings if f not in urgent]
             report.findings = self.rules.apply(rest, tags_by_target) + list(urgent)
@@ -280,10 +287,10 @@ class Pipeline:
             deliverable = (
                 report.findings if dry_run else self._drop_recently_alerted(report)
             )
-            hot = [f for f in deliverable if f in urgent]
+            hot = [f for f in deliverable if f in urgent and not _is_social(f)]
             if hot:
                 self._send_urgent(hot, report, dry_run=dry_run)
-            regular = [f for f in deliverable if f not in urgent]
+            regular = [f for f in deliverable if f not in hot]
             if regular:
                 self._dispatch(regular, report, dry_run=dry_run, preview=preview)
             elif digest and not dry_run:

@@ -84,6 +84,8 @@ class Target(BaseModel):
     body: str | None = None
 
     selectors: Selectors = Field(default_factory=Selectors)
+    # For the twitter scraper: the X handles whose timelines to read.
+    handles: list[str] = Field(default_factory=list)
     # For the json scraper: dotted path to the list of records, e.g. "data.items".
     json_path: str | None = None
     json_fields: dict[str, str] = Field(default_factory=dict)

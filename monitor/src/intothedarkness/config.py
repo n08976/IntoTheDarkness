@@ -147,6 +147,26 @@ class Settings(BaseSettings):
     # rather than when the title *is* the vendor as on a leak site.
     watchlist_headline_tags: list[str] = Field(default_factory=lambda: ["news"])
 
+    # --- X / Twitter feeds -------------------------------------------------
+    # One burner account's session cookies, local .env only, never committed.
+    # The monitor reads a few feeds' timelines as that logged-in session; X is
+    # clearnet so these always go direct (the routing rule enforces it).
+    x_auth_token: str = ""
+    x_ct0: str = ""
+    # The public web-client bearer (not a secret; it ships in X's own JS).
+    x_bearer: str = (
+        "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs"
+        "%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+    )
+    x_user_agent: str = "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0"
+    x_tweet_count: int = 20
+    # GraphQL query ids rotate when X ships a new web bundle; these are the
+    # fallback, and the scraper re-extracts them from the live bundle into
+    # data/x/client.json when a call rejects a stale id.
+    x_query_user_by_screen_name: str = "KybxDj9RrADIITXlGG8kpw"
+    x_query_user_tweets: str = "qJy3MbaNndtzxf9IqUzxMg"
+
+
     # SEC EDGAR: 8-K cyber-incident filings by watchlist vendors. EDGAR
     # requires a User-Agent naming a contact ("Name email@example.com").
     sec_user_agent: str = ""

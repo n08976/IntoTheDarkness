@@ -798,11 +798,30 @@ Sources are of four kinds, and each is read the way it can be read:
 | News | UnderCode | RSS, direct; headlines only feed the watchlist rule above and the healthcare-by-name rule |
 | Anything else | CTIWatch, LAPSUS$ | CTIWatch's site and API are Cloudflare-walled, key or no key, so its public Telegram channel preview is parsed instead; LAPSUS$ publishes statements, not a table, so the page is watched whole for change |
 | Regulatory filings | SEC EDGAR | 8-K filings by watchlist vendors that are SEC filers, kept only when they disclose a cyber incident (see below) |
+| Social / X feeds | A few ransomware-tracking X accounts | read as one logged-in session over the direct route (X is clearnet); only posts naming a watchlist vendor or a healthcare target surface, in their own report section — see below |
 
 Sites behind a captcha or a JavaScript wall with no feed, API or channel
 (ShinyHunters, RansomHouse, The Gentlemen) are bookmarked but not scraped:
 nothing short of a browser reads them, and a browser is not something this
 runs unattended. Their victims still arrive through the aggregators.
+
+### Monitored X feeds
+
+A short list of ransomware-tracking X (Twitter) accounts is read once an hour.
+X has no usable free API and the no-auth paths (syndication, Nitter, RSS
+bridges) are empty or rate-limited, so the monitor replays one burner account's
+web-session cookies (`auth_token` + `ct0`, local `.env` only, never committed)
+and calls the same GraphQL timeline endpoints the browser does -- no headless
+browser. X is clearnet, so this always goes direct. Query ids rotate when X
+ships a new web bundle; the current ids are cached under `data/x/` and
+re-extracted from the live bundle when a call rejects a stale one.
+
+Only **relevant** posts reach the inbox: a post surfaces when it names a
+watchlist vendor or classifies as healthcare, the same rules every other source
+passes. They render in their own **Monitored X feeds** section of the regular
+report -- never a separate email, and never as an `[URGENT]` message even on a
+watchlist match. The feeds are configured as a `twitter` target whose `handles`
+list names the accounts; a new handle is one line of config.
 
 ### SEC 8-K filings by watchlist vendors
 

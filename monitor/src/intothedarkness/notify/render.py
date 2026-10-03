@@ -132,6 +132,32 @@ def _is_filing(f: Finding) -> bool:
     return bool(f.item and str(f.item.fields.get("form", "")).startswith("8-K"))
 
 
+def _is_social(f: Finding) -> bool:
+    return bool(f.item and f.item.fields.get("source") == "x")
+
+
+def _split_social(entries: Sequence[Finding]) -> tuple[list[Finding], list[Finding]]:
+    """(posts from monitored X feeds, everything else).
+
+    X feeds are their own section: relevant posts only (a leak-site victim or a
+    watchlist vendor named in a tweet), never mixed into the victim lists below.
+    """
+    social = [f for f in entries if _is_social(f)]
+    rest = [f for f in entries if not _is_social(f)]
+    return social, rest
+
+
+def _social_line(f: Finding) -> str:
+    it = f.item
+    if it is None:
+        return f.message
+    handle = it.fields.get("handle", "")
+    tag = _watch_tag(f)
+    if not tag and _sector_of(f) != "unknown":
+        tag = f"   [{_sector_of(f)}]"
+    return f"@{handle}: {it.summary()}{tag}"
+
+
 def _is_recent(f: Finding, days: int, now: datetime) -> bool:
     """Within `days` of now by the date the reader sees (see dates.sort_key)."""
     if days <= 0:
@@ -226,6 +252,7 @@ def render_digest_text(
     now: datetime | None = None,
 ) -> str:
     """The full running list, with anything new since the last report first."""
+    social, entries = _split_social(entries)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     recent = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
     new = [f for f in entries if f.item and f.item.key in new_keys]
@@ -271,6 +298,19 @@ def render_digest_text(
         ]
         for f in _newest_first(filings):
             lines.append(f"  !! {_filing_line(f)}")
+            lines += _links(f)
+        lines.append("")
+
+    # Monitored X feeds: relevant posts only, their own section above the victim
+    # lists so social intel is never confused with a confirmed leak-site victim.
+    if social:
+        lines += [
+            f"MONITORED X FEEDS — RELEVANT POSTS ({len(social)})",
+            "=" * 46,
+            "",
+        ]
+        for f in _newest_first(social):
+            lines.append(f"  ~ {_social_line(f)}")
             lines += _links(f)
         lines.append("")
 
@@ -449,6 +489,20 @@ _DIGEST_HTML = _env.from_string(
   </div>
   {% endif %}
 
+  {% if social %}
+  <div style="border:2px solid #4338ca;border-radius:6px;padding:2px 16px 10px;
+              margin-bottom:24px;background:#eef2ff">
+    <h2 style="font-size:15px;margin:12px 0 4px;color:#3730a3">
+      &#128038; Monitored X feeds — relevant posts ({{ social|length }})</h2>
+    <p style="margin:0 0 8px;color:#3730a3;font-size:12px">
+      Posts from the watched X accounts that name a watchlist vendor or a
+      healthcare target. Social intel, not confirmed leak-site victims.</p>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      {% for f in social %}{{ entry(f) }}{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if new %}
   <div style="border:2px solid #dc2626;border-radius:6px;padding:2px 16px 10px;
               margin-bottom:24px;background:#fef2f2">
@@ -495,6 +549,10 @@ _ENTRY = _env.from_string(
       filed {{ f.item.fields.get('published') }}
       · {{ f.item.fields.get('status') }}{% endif %}</span>
   {%- endif %}
+  {%- if f.item and f.item.fields.get('source') == 'x' %}
+  <span style="font-size:11px;color:#4338ca;font-weight:600;margin-left:6px">@{{
+    f.item.fields.get('handle') }}</span>
+  {%- endif %}
   <span style="font-size:11px;color:#6b7280;text-transform:uppercase;
                letter-spacing:.04em;margin-left:6px">{{ sector }}</span>
   <div style="font-size:12px;color:#6b7280;margin-top:1px">
@@ -534,6 +592,7 @@ def render_digest_html(
 ) -> str:
     from ..models import utcnow
 
+    social, entries = _split_social(entries)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     running, uncarried = _carried(
@@ -544,6 +603,7 @@ def render_digest_html(
         vendors=_newest_first(vendors),
         filings=_newest_first(filings),
         new=_priority_first(new, priority),
+        social=_newest_first(social),
         running=_newest_first(running),
         uncarried=uncarried,
         carried=", ".join(carry) if carry else "all sectors",

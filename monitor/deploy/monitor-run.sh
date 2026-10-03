@@ -61,6 +61,15 @@ WATCHLIST_INTERVAL="${ITD_WATCHLIST_INTERVAL_MINUTES:-$(grep -E '^ITD_WATCHLIST_
 WATCHLIST_INTERVAL="${WATCHLIST_INTERVAL:-60}"
 WATCHLIST_STAMP="${PROJECT}/data/watchlist.last"
 
+# X/Twitter feeds are polled hourly on the hour, independently of the leak
+# sites' slower cadence: inside a scheduled full-sweep hour they ride that
+# sweep, and on every other hour a dedicated X-only run goes at :00.
+X_TARGET="${ITD_X_TARGET:-x-feeds}"
+x_configured() {
+    grep -q "name: ${X_TARGET}" "${PROJECT}/config/targets.yaml" 2>/dev/null \
+        && grep -qE '^ITD_X_AUTH_TOKEN=.' "${PROJECT}/.env" 2>/dev/null
+}
+
 DIGEST=""
 MODE="sweep"
 if [ "${1:-}" = "--scheduled" ]; then
@@ -68,7 +77,7 @@ if [ "${1:-}" = "--scheduled" ]; then
     minute="$(date +%M)"
     case " ${RUN_HOURS} " in
         *" ${now} "*) [ "${minute}" = "00" ] || MODE="watchlist" ;;
-        *) MODE="watchlist" ;;
+        *) if [ "${minute}" = "00" ] && x_configured; then MODE="xonly"; else MODE="watchlist"; fi ;;
     esac
     if [ "${MODE}" = "watchlist" ]; then
         [ -s "${PROJECT}/watchlist/vendors.txt" ] || exit 0
@@ -151,6 +160,11 @@ if [ "${MODE}" = "watchlist" ]; then
     out="$("${VENV}/itd" run --force --watchlist-only 2>&1)"
     rc=$?
     date +%s > "${WATCHLIST_STAMP}"
+elif [ "${MODE}" = "xonly" ]; then
+    # Hourly X poll: relevant posts ride the regular report's X section; nothing
+    # relevant means no mail, and X never sends a separate [URGENT] message.
+    out="$("${VENV}/itd" run --force -t "${X_TARGET}" 2>&1)"
+    rc=$?
 else
     out="$("${VENV}/itd" run --force ${DIGEST} 2>&1)"
     rc=$?

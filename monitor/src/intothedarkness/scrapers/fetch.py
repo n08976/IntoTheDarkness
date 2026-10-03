@@ -265,8 +265,14 @@ class Fetcher:
         body: str | None = None,
         network: str | Network = Network.AUTO,
         max_redirects: int = 5,
+        skip_robots: bool = False,
     ) -> Response:
-        """Fetch a URL, following redirects only within the same network."""
+        """Fetch a URL, following redirects only within the same network.
+
+        ``skip_robots`` is for an authenticated API read that mirrors what the
+        site's own browser client does (the X timeline endpoints), where the
+        generic crawler robots rules do not apply.
+        """
         resolved = resolve_network(url, network)
 
         if resolved is Network.TOR and is_onion(url):
@@ -276,7 +282,9 @@ class Fetcher:
 
         current = url
         for hop in range(max_redirects + 1):
-            resp = self._request_once(method, current, resolved, headers, params, body)
+            resp = self._request_once(
+                method, current, resolved, headers, params, body, skip_robots=skip_robots
+            )
 
             if resp.status not in (301, 302, 303, 307, 308):
                 return resp
@@ -311,11 +319,12 @@ class Fetcher:
         headers: dict[str, str] | None,
         params: dict[str, str] | None,
         body: str | None,
+        skip_robots: bool = False,
     ) -> Response:
         profile = self.profile(network)
         client = self._client(network)
 
-        if profile.respect_robots and not self._robots.allowed(url, client):
+        if profile.respect_robots and not skip_robots and not self._robots.allowed(url, client):
             raise FetchError(f"robots.txt disallows {url}")
 
         rotated_once = False
