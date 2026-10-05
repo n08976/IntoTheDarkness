@@ -71,18 +71,20 @@ def test_running_list_is_one_flat_list_newest_first_with_sector_inline():
         return Finding(kind=FindingKind.NEW, target="t", item=item,
                        created_at=datetime(2026, 9, 12, tzinfo=UTC))
 
+    now = datetime(2026, 9, 12, tzinfo=UTC)
     entries = [
         f("a", "Older Clinic", "healthcare", "2026-08-01"),
         f("b", "Mid Widgets", "manufacturing", "2026-08-15"),
         f("c", "Newest Hospital", "healthcare", "2026-09-10"),
     ]
-    text = render_digest_text(entries, set(), carry=())      # every sector in the running list
-    body = text.split("DISCOVERED IN THE LAST", 1)[1]
-    assert body.index("Newest Hospital") < body.index("Mid Widgets") < body.index("Older Clinic")
+    # window wide enough to keep all three; carry=() lists every sector
+    text = render_digest_text(entries, set(), carry=(), now=now, window_days=90)
+    # Newest is in Recent, the two older ones in Previous below it: still newest-first overall
+    assert text.index("Newest Hospital") < text.index("Mid Widgets") < text.index("Older Clinic")
     assert "-- healthcare" not in text                     # no sector headings
     assert "[manufacturing] Mid Widgets" in text           # sector inline instead
 
-    html = render_digest_html(entries, set(), carry=())
+    html = render_digest_html(entries, set(), carry=(), now=now, window_days=90)
     assert html.index("Newest Hospital") < html.index("Mid Widgets") < html.index("Older Clinic")
 
 
@@ -120,21 +122,22 @@ def test_new_section_leads_with_priority_sectors_and_running_list_carries_only_t
 
     def f(key, title, sector, age):
         when = datetime(2026, 9, 23, tzinfo=UTC) - timedelta(days=age)
-        item = Item(key=key, target="t", title=title, fields={"sector": sector})
+        item = Item(key=key, target="t", title=title, fields={"sector": sector}, seen_at=when)
         return Finding(kind=FindingKind.NEW, target="t", created_at=when, item=item)
 
     entries = [f("a", "Acme Steel", "manufacturing", 0), f("b", "Mercy Clinic", "healthcare", 1),
                f("c", "Old Mill", "manufacturing", 10), f("d", "Old Hospital", "healthcare", 12)]
-    text = render_digest_text(entries, {"a", "b"})
-    new = text.split("NEW SINCE LAST REPORT", 1)[1].split("DISCOVERED IN", 1)[0]
+    now = datetime(2026, 9, 23, tzinfo=UTC)
+    text = render_digest_text(entries, {"a", "b"}, now=now)
+    new = text.split("NEW SINCE LAST REPORT", 1)[1].split("PREVIOUS", 1)[0]
     assert new.index("Mercy Clinic") < new.index("Acme Steel")   # priority first though older
-    running = text.split("DISCOVERED IN", 1)[1]
-    assert "Old Hospital" in running and "Old Mill" not in running       # carried sectors only
-    assert "plus 1 entries in other sectors" in running
-    html = render_digest_html(entries, {"a", "b"})
+    previous = text.split("PREVIOUS", 1)[1]
+    assert "Old Hospital" in previous and "Old Mill" not in previous     # carried sectors only
+    assert "plus 1 in other sectors" in previous
+    html = render_digest_html(entries, {"a", "b"}, now=now)
     assert html.index("Mercy Clinic") < html.index("Acme Steel") and "Old Mill" not in html
-    everything = render_digest_text(entries, {"a", "b"}, carry=())
-    assert "Old Mill" in everything.split("DISCOVERED IN", 1)[1]
+    everything = render_digest_text(entries, {"a", "b"}, carry=(), now=now)
+    assert "Old Mill" in everything.split("PREVIOUS", 1)[1]
 
 
 def test_vendor_sec_filings_get_their_own_section_beneath_vendor_victims():
@@ -156,7 +159,7 @@ def test_vendor_sec_filings_get_their_own_section_beneath_vendor_victims():
     ]
     now = datetime(2026, 9, 15, tzinfo=UTC)          # the filing is a week old
     text = render_digest_text(entries, {"c"}, now=now)
-    marks = ("VENDOR VICTIMS", "SEC 8-K CYBER FILINGS", "DISCOVERED IN")
+    marks = ("VENDOR VICTIMS", "SEC 8-K CYBER FILINGS", "NEW SINCE LAST REPORT")
     i_v, i_f, i_d = (text.index(k) for k in marks)
     assert i_v < i_f < i_d
     victims = text.split("SEC 8-K CYBER FILINGS", 1)[0]
@@ -197,28 +200,29 @@ def test_vendor_entries_older_than_the_priority_window_age_out_marked():
           sector="healthcare", published="2026-08-01"),
         f("e", "agg-x", "Textile City", sector="manufacturing", published="2026-09-28"),
     ]
-    text = render_digest_text(entries, {"d", "e"}, priority_days=10, now=now)
+    text = render_digest_text(entries, {"d", "e"}, priority_days=10, now=now, window_days=90)
     top = text.split("NEW SINCE LAST REPORT", 1)[0]
     assert "LAST 10 DAYS" in top and "Beckman Coulter, Inc" in top
     for aged in ("Olympus Corporation", "BOSTON SCIENTIFIC", "Cytek"):
         assert aged not in top
     assert "SEC 8-K CYBER FILINGS" not in text                     # box empty, so absent
-    new, running = text.split("NEW SINCE LAST REPORT", 1)[1].split("DISCOVERED IN", 1)
+    new, previous = text.split("NEW SINCE LAST REPORT", 1)[1].split("PREVIOUS", 1)
     assert "Cytek Biosciences   [VENDOR: Cytek Biosciences]" in new
-    assert "Olympus Corporation   [VENDOR: Olympus Corporation]" in running
-    assert "BOSTON SCIENTIFIC CORP   [SEC 8-K: Boston Scientific]" in running
-    assert "Textile City" not in running and "plus 0" not in text  # carry rule still applies
+    assert "Olympus Corporation   [VENDOR: Olympus Corporation]" in previous
+    assert "BOSTON SCIENTIFIC CORP   [SEC 8-K: Boston Scientific]" in previous
+    assert "Textile City" not in previous and "plus 0" not in text  # carry rule still applies
     assert text.count("Beckman Coulter, Inc") == 1
 
-    html = render_digest_html(entries, {"d", "e"}, priority_days=10, now=now)
+    html = render_digest_html(entries, {"d", "e"}, priority_days=10, now=now, window_days=90)
     assert "last 10 days" in html
-    assert "SEC 8-K ·\n    vendor: Boston Scientific" in html
-    assert "VENDOR ·\n    vendor: Olympus Corporation" in html
     assert html.index("Beckman Coulter, Inc") < html.index("New since last report")
-    assert html.index("Olympus Corporation") > html.index("Discovered in the last")
+    # aged vendor/8-K entries drop into the compact Previous list, still marked
+    prev_html = html.split("Previous", 1)[1]
+    assert "Olympus Corporation" in prev_html and "VENDOR" in prev_html
+    assert "Boston Scientific" in prev_html and "SEC 8-K" in prev_html
 
     # 0 keeps the old behaviour: everything vendor-flagged stays on top
-    text0 = render_digest_text(entries, {"d", "e"}, priority_days=0, now=now)
+    text0 = render_digest_text(entries, {"d", "e"}, priority_days=0, now=now, window_days=90)
     top0 = text0.split("NEW SINCE LAST REPORT", 1)[0]
     assert "Olympus Corporation" in top0 and "BOSTON SCIENTIFIC" in top0
 

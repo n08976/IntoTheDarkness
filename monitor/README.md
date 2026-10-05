@@ -739,14 +739,18 @@ Every emailed report has the same shape, top to bottom:
    `[VENDOR: <name>]` or `[SEC 8-K: <name>]`, so the history still says what
    they were without the top of a report about this week carrying last
    month's. `0` keeps them on top for the whole window.
-3. **New since the last report** — every sector, with the priority sectors
-   (`ITD_PRIORITY_SECTORS`, default healthcare) listed first, then the rest,
-   newest first within each.
-4. **Discovered in the last 60 days** — the running list, carrying only the
-   sectors in `ITD_DIGEST_SECTORS` (default healthcare) with the rest counted
-   on one line. At 30–180 victims a day across all sectors, a full running list
-   is not an email anyone reads; set it empty to carry everything.
-5. What the sweep managed — targets swept, items read, any target that failed
+3. **New since the last report** — every sector, priority sectors
+   (`ITD_PRIORITY_SECTORS`, default healthcare) first, newest first within each.
+4. **Recent — last `ITD_RECENT_DAYS` days** (default 4) — the running list in
+   full detail, carrying only `ITD_DIGEST_SECTORS` (default healthcare) with the
+   rest counted on one line.
+5. **Previous — `recent_days`..cutoff** — the same list older than the recent
+   window, as compact one-liners (date, sector, name, any vendor/8-K mark) so
+   the tail stops repeating a full dossier every day. The cutoff is
+   `ITD_EMAIL_DAYS` (default 30) in the email and `ITD_WEB_DAYS` (default 180)
+   on the website, so nothing older than a month reaches the inbox while the
+   site keeps the longer history; entries past the cutoff fall off entirely.
+6. What the sweep managed — targets swept, items read, any target that failed
    — so an empty report cannot be mistaken for a quiet day when it means the
    sources were unreachable.
 

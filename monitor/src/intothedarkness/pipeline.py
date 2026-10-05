@@ -458,7 +458,8 @@ class Pipeline:
         return dict(routes)
 
     def _message_for(
-        self, notifier: Notifier, group: Sequence[Finding], report: RunReport
+        self, notifier: Notifier, group: Sequence[Finding], report: RunReport,
+        channel: str = "",
     ) -> Message:
         """Render for one channel.
 
@@ -490,28 +491,29 @@ class Pipeline:
         known = {f.item.key for f in entries if f.item}
         entries = list(entries) + [f for f in group if f.item and f.item.key not in known]
 
-        days = self.settings.digest_days
+        s = self.settings
+        # The website keeps the longer history; the inbox is capped tighter so a
+        # report stops repeating the same victims for weeks.
+        window = s.web_days if channel == "web" else s.email_days
+        days = window
         if new_keys:
             top = max((f.severity for f in group), key=lambda sev: sev.rank)
             subject = (
                 f"[{top.value.upper()}] IntoTheDarkness: {len(new_keys)} new — "
-                f"{len(entries)} in the last {days} days"
+                f"last {days} days"
             )
         else:
-            subject = (
-                f"IntoTheDarkness daily: no new entries — {len(entries)} in the last {days} days"
-            )
+            subject = f"IntoTheDarkness daily: no new entries — last {days} days"
 
-        s = self.settings
         text = render_digest_text(
-            entries, new_keys, status=status, window_days=s.digest_days,
-            priority=s.priority_sectors, carry=s.digest_sectors,
-            priority_days=s.priority_days,
+            entries, new_keys, status=status, window_days=window,
+            recent_days=s.recent_days, priority=s.priority_sectors,
+            carry=s.digest_sectors, priority_days=s.priority_days,
         )
         html = render_digest_html(
-            entries, new_keys, status=status, window_days=s.digest_days,
-            priority=s.priority_sectors, carry=s.digest_sectors,
-            priority_days=s.priority_days,
+            entries, new_keys, status=status, window_days=window,
+            recent_days=s.recent_days, priority=s.priority_sectors,
+            carry=s.digest_sectors, priority_days=s.priority_days,
         )
         return Message(subject=subject, text=text, html=html, findings=group)
 
@@ -532,7 +534,7 @@ class Pipeline:
                 ok, why = notifier.available()
                 if not ok:
                     raise RuntimeError(why)
-                notifier.send(self._message_for(notifier, [], report))
+                notifier.send(self._message_for(notifier, [], report, channel=channel))
                 report.notified.setdefault(channel, 0)
                 log.info("daily digest sent to %s (nothing new)", channel)
             except Exception as exc:
@@ -574,7 +576,7 @@ class Pipeline:
                 ok, why = notifier.available()
                 if not ok:
                     raise RuntimeError(why)
-                message = self._message_for(notifier, group, report)
+                message = self._message_for(notifier, group, report, channel=channel)
                 notifier.send(message)
             except Exception as exc:
                 log.error("channel %s failed: %s", channel, exc)

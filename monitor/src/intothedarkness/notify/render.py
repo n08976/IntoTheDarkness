@@ -158,8 +158,9 @@ def _social_line(f: Finding) -> str:
     return f"@{handle}: {it.summary()}{tag}"
 
 
-def _is_recent(f: Finding, days: int, now: datetime) -> bool:
+def _is_recent(f: Finding, days: int, now: datetime | None = None) -> bool:
     """Within `days` of now by the date the reader sees (see dates.sort_key)."""
+    now = now or datetime.now(UTC)
     if days <= 0:
         return True
     when = stamp_for(f).when or f.created_at
@@ -245,25 +246,32 @@ def render_digest_text(
     new_keys: set[str],
     target_label: str = "",
     status: str = "",
-    window_days: int = 60,
+    window_days: int = 30,
+    recent_days: int = 4,
     priority: Sequence[str] = ("healthcare",),
     carry: Sequence[str] = ("healthcare",),
     priority_days: int = 10,
     now: datetime | None = None,
 ) -> str:
-    """The full running list, with anything new since the last report first."""
+    """New first, then Recent, then a compact Previous list out to window_days."""
     social, entries = _split_social(entries)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
-    recent = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
+    pwin = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
     new = [f for f in entries if f.item and f.item.key in new_keys]
-    running, uncarried = _carried(
-        [f for f in entries if not (f.item and f.item.key in new_keys)], carry
+    aged = [f for f in entries if not (f.item and f.item.key in new_keys)]
+    aged = [f for f in aged if _is_recent(f, window_days, now)]   # drop beyond the cutoff
+    recent_list, recent_rest = _carried(
+        [f for f in aged if _is_recent(f, recent_days, now)], carry
+    )
+    previous_list, previous_rest = _carried(
+        [f for f in aged if not _is_recent(f, recent_days, now)], carry
     )
 
     lines = [
         f"{len(new)} new since the last report"
         + (f" across {target_label}" if target_label else "")
-        + f"; {len(running)} more in the last {window_days} days."
+        + f"; {len(recent_list)} recent, {len(previous_list)} earlier"
+        + f" (last {window_days} days)."
         + (f" {len(vendors)} VENDOR VICTIM(S)." if vendors else "")
         + (f" {len(filings)} VENDOR SEC FILING(S)." if filings else ""),
         "",
@@ -275,7 +283,7 @@ def render_digest_text(
     # leak site. Listed once, here, and not again below.
     if vendors:
         lines += [
-            f"!!  VENDOR VICTIMS — PRIORITY WATCHLIST{recent} ({len(vendors)})",
+            f"!!  VENDOR VICTIMS — PRIORITY WATCHLIST{pwin} ({len(vendors)})",
             "!!" + "=" * 44,
             "",
         ]
@@ -292,7 +300,7 @@ def render_digest_text(
     # Directly beneath: vendors that told the SEC about a cyber incident.
     if filings:
         lines += [
-            f"!!  SEC 8-K CYBER FILINGS — WATCHLIST VENDORS{recent} ({len(filings)})",
+            f"!!  SEC 8-K CYBER FILINGS — WATCHLIST VENDORS{pwin} ({len(filings)})",
             "!!" + "=" * 44,
             "",
         ]
@@ -337,20 +345,42 @@ def render_digest_text(
         lines += ["No new entries since the last report.", ""]
 
     carried = ", ".join(carry) if carry else "all sectors"
-    lines += [
-        f"DISCOVERED IN THE LAST {window_days} DAYS — {carried} ({len(running)}), newest first",
-        "=" * 46,
-        "",
-    ]
-    for f in _newest_first(running):
-        lines.append(
-            f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}"
-            + _watch_tag(f)
-        )
-        lines += _links(f)
-    if uncarried:
-        lines.append(f"  … plus {uncarried} entries in other sectors, not listed.")
-    lines.append("")
+
+    # Recent: the last `recent_days`, full detail.
+    if recent_list:
+        lines += [
+            f"RECENT — LAST {recent_days} DAYS — {carried} ({len(recent_list)}), newest first",
+            "=" * 46,
+            "",
+        ]
+        for f in _newest_first(recent_list):
+            lines.append(
+                f"  - [{_sector_of(f)}] {f.item.summary() if f.item else f.message}"
+                + _watch_tag(f)
+            )
+            lines += _links(f)
+        if recent_rest:
+            lines.append(f"  … plus {recent_rest} in other sectors, not listed.")
+        lines.append("")
+
+    # Previous: older than recent_days, out to the cutoff. Compact one-liners
+    # with a date, no link block, so the tail stops feeling repetitive.
+    if previous_list:
+        lines += [
+            f"PREVIOUS — {recent_days}–{window_days} DAYS — {carried} "
+            f"({len(previous_list)}), newest first",
+            "=" * 46,
+            "",
+        ]
+        for f in _newest_first(previous_list):
+            stamp = stamp_for(f)
+            lines.append(
+                f"  - {stamp.text} [{_sector_of(f)}] "
+                f"{f.item.summary() if f.item else f.message}{_watch_tag(f)}"
+            )
+        if previous_rest:
+            lines.append(f"  … plus {previous_rest} in other sectors, not listed.")
+        lines.append("")
 
     return "\n".join(lines).rstrip()
 
@@ -518,16 +548,32 @@ _DIGEST_HTML = _env.from_string(
   <p style="margin:0 0 20px;color:#6b7280">No new entries since the last report.</p>
   {% endif %}
 
+  {% if recent_list %}
   <h2 style="font-size:15px;margin:0 0 8px;padding-bottom:4px;
              border-bottom:1px solid #e5e7eb">
-    Discovered in the last {{ window_days }} days — {{ carried }} ({{ running|length }})
+    Recent — last {{ recent_days }} days — {{ carried }} ({{ recent_list|length }})
     <span style="font-weight:normal;color:#9ca3af;font-size:12px">newest first</span></h2>
   <ul style="margin:8px 0 0;padding-left:18px">
-    {% for f in running %}{{ entry(f) }}{% endfor %}
+    {% for f in recent_list %}{{ entry(f) }}{% endfor %}
   </ul>
-  {% if uncarried %}
+  {% if recent_rest %}
   <p style="margin:8px 0 0;color:#9ca3af;font-size:12px">
-    … plus {{ uncarried }} entries in other sectors, not listed.</p>
+    … plus {{ recent_rest }} in other sectors, not listed.</p>
+  {% endif %}
+  {% endif %}
+
+  {% if previous_list %}
+  <h2 style="font-size:14px;margin:22px 0 6px;padding-bottom:4px;color:#6b7280;
+             border-bottom:1px solid #e5e7eb">
+    Previous — {{ recent_days }}–{{ window_days }} days — {{ carried }}
+    ({{ previous_list|length }})</h2>
+  <ul style="margin:6px 0 0;padding-left:18px;color:#6b7280;font-size:13px">
+    {% for f in previous_list %}{{ prev(f) }}{% endfor %}
+  </ul>
+  {% if previous_rest %}
+  <p style="margin:6px 0 0;color:#9ca3af;font-size:12px">
+    … plus {{ previous_rest }} in other sectors, not listed.</p>
+  {% endif %}
   {% endif %}
 
   <p style="margin-top:24px;color:#9ca3af;font-size:12px">
@@ -580,11 +626,26 @@ _ENTRY = _env.from_string(
 )
 
 
+_PREV = _env.from_string(
+    """<li style="margin-bottom:2px">
+  <span style="color:#9ca3af">{{ stamp(f).text }}</span>
+  {{ f.item.summary() if f.item else f.message }}
+  <span style="font-size:11px;color:#9ca3af;text-transform:uppercase">{{ sector }}</span>
+  {%- if f.item and f.item.fields.get('watchlist') %}
+  <span style="font-size:11px;color:#92400e">·
+    {{ 'SEC 8-K' if f.item.fields.get('form') else 'VENDOR' }}:
+    {{ f.item.fields['watchlist'] }}</span>
+  {%- endif %}
+</li>"""
+)
+
+
 def render_digest_html(
     entries: Sequence[Finding],
     new_keys: set[str],
     status: str = "",
-    window_days: int = 60,
+    window_days: int = 30,
+    recent_days: int = 4,
     priority: Sequence[str] = ("healthcare",),
     carry: Sequence[str] = ("healthcare",),
     priority_days: int = 10,
@@ -595,8 +656,11 @@ def render_digest_html(
     social, entries = _split_social(entries)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     new = [f for f in entries if f.item and f.item.key in new_keys]
-    running, uncarried = _carried(
-        [f for f in entries if not (f.item and f.item.key in new_keys)], carry
+    aged = [f for f in entries if not (f.item and f.item.key in new_keys)]
+    aged = [f for f in aged if _is_recent(f, window_days, now)]
+    recent_list, recent_rest = _carried([f for f in aged if _is_recent(f, recent_days, now)], carry)
+    previous_list, previous_rest = _carried(
+        [f for f in aged if not _is_recent(f, recent_days, now)], carry
     )
     return _DIGEST_HTML.render(
         total=len(entries),
@@ -604,15 +668,18 @@ def render_digest_html(
         filings=_newest_first(filings),
         new=_priority_first(new, priority),
         social=_newest_first(social),
-        running=_newest_first(running),
-        uncarried=uncarried,
+        recent_list=_newest_first(recent_list),
+        previous_list=_newest_first(previous_list),
+        recent_rest=recent_rest,
+        previous_rest=previous_rest,
         carried=", ".join(carry) if carry else "all sectors",
         priority_label=", ".join(priority),
         priority_days=priority_days,
+        recent_days=recent_days,
         recent=f", last {priority_days} days" if priority_days > 0 else "",
-        # The entry is already-rendered HTML. Without Markup, autoescape on
-        # the outer template turns every <li> into literal text in the mail.
+        # Already-rendered HTML; Markup stops the outer autoescape turning <li> to text.
         entry=lambda f: Markup(_ENTRY.render(f=f, stamp=stamp_for, sector=_sector_of(f))),
+        prev=lambda f: Markup(_PREV.render(f=f, stamp=stamp_for, sector=_sector_of(f))),
         status=status,
         window_days=window_days,
         now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),

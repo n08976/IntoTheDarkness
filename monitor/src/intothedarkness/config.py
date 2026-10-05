@@ -97,7 +97,9 @@ class Settings(BaseSettings):
 
     # How far back the running list in an emailed report reaches. The report
     # leads with what is new since the last one; this is the tail below it.
-    digest_days: int = 60
+    # The window fetched from the DB to build a report. It must be >= web_days
+    # so the website can show its longer history; email uses its own cutoff.
+    digest_days: int = 180
     # Recipients (addresses or bare domains) whose copy of a report gets its
     # URLs rewritten as hxxp://host[.]tld. One institutional gateway drops any
     # report carrying raw .onion links and passes the same report de-fanged,
@@ -116,6 +118,14 @@ class Settings(BaseSettings):
     # general sections, still marked as vendor or 8-K. 0 keeps them on top
     # for the whole window.
     priority_days: int = 10
+    # Report aging (2026-10-05): the victim lists age in two steps so a report
+    # stops repeating the same entries for weeks. "Recent" is the last
+    # recent_days; "Previous" runs recent_days..email_days as compact one-liners;
+    # nothing older than email_days is in the email at all. The website renders
+    # the same buckets but out to web_days, so it keeps the longer history.
+    recent_days: int = 4
+    email_days: int = 30
+    web_days: int = 180
 
     # Priority watchlist: vendor names whose appearance anywhere is urgent.
     # The list is edited in the git repository and pushed; this box has no

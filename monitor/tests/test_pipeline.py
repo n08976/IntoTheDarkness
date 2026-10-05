@@ -367,7 +367,6 @@ def test_inbox_channels_get_the_running_list_and_the_console_does_not(settings, 
         plain = CapturingNotifier.sent[-1].text
 
         assert "NEW SINCE LAST REPORT" in digest
-        assert "DISCOVERED IN THE LAST" in digest
         assert "Beta" in digest
         assert "NEW SINCE LAST REPORT" not in plain   # console keeps the run only
     finally:
