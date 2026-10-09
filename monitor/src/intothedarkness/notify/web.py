@@ -59,6 +59,16 @@ main{{max-width:760px;margin:0 auto;padding:24px 16px 60px}}a{{color:#1d4ed8;tex
 """
 
 
+# External article links on the public page open in a new tab, so the reader
+# keeps the report open while reading. Only http(s) links are touched; in-page
+# anchors (#diagnostics) and de-fanged onion links are left alone.
+_EXT_LINK = re.compile(r'<a\s+href="(https?://)', re.I)
+
+
+def open_links_in_new_tab(html: str) -> str:
+    return _EXT_LINK.sub(r'<a target="_blank" rel="noopener noreferrer" href="\1', html)
+
+
 @register
 class WebNotifier(Notifier):
     """Write the report into a git checkout and push it."""
@@ -90,6 +100,8 @@ class WebNotifier(Notifier):
             body = defang_onion(body)
         # The report's own footer names the product; the page names nothing.
         body = re.sub(r"IntoTheDarkness\s*·\s*", "", body)
+        # Article links open in a new tab.
+        body = open_links_in_new_tab(body)
 
         events = diag.load(Path(s.issues_file))
         issues = diag.open_issues(events)
