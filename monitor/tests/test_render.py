@@ -253,12 +253,51 @@ def test_x_feed_posts_render_in_their_own_section_not_the_victim_lists():
     text = render_digest_text(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
     assert "MONITORED X FEEDS" in text
     assert text.index("MONITORED X FEEDS") < text.index("NEW SINCE LAST REPORT")
-    assert "@vxunderground" in text and "@FalconFeedsio" in text
-    # the two tweets are in the X section, not the vendor-victims section
+    # the healthcare tweet stays in the feeds section
+    feeds = text.split("MONITORED X FEEDS", 1)[1]
+    assert "@vxunderground" in feeds
+    # the watchlist tweet is promoted to Vendor Victims (marked via X), not the feeds box
     vendor_block = text.split("MONITORED X FEEDS", 1)[0]
-    assert "vendor: Hologic" in vendor_block.lower() or "Hologic" in vendor_block
-    assert "FalconFeedsio" not in vendor_block        # the watchlist tweet is not a vendor victim
+    assert "[vendor: Hologic]" in vendor_block
+    assert "@FalconFeedsio" in vendor_block and "Acme Corp breach" in vendor_block
+    assert "FalconFeedsio" not in feeds
 
     html = render_digest_html(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
     assert "Monitored X feeds" in html and "@vxunderground" in html
     assert html.index("Monitored X feeds") < html.index("New since last report")
+
+
+def test_x_post_naming_a_vendor_goes_to_vendor_victims_marked_via_x():
+    from datetime import UTC, datetime
+
+    from intothedarkness.models import Finding, FindingKind, Item
+    from intothedarkness.notify import render_digest_html, render_digest_text
+
+    now = datetime(2026, 10, 9, 14, tzinfo=UTC)
+
+    def f(key, title, **fields):
+        item = Item(key=key, target="x-feeds", title=title,
+                    url=fields.pop("url", ""), fields=fields)
+        return Finding(kind=FindingKind.NEW, target="x-feeds", item=item, created_at=now)
+
+    entries = [
+        # an X post that matched the watchlist -> Vendor Victims, not the feeds box
+        f("x:1", "Acme Corp breach dumped by a ransomware crew", source="x",
+          handle="FalconFeedsio", watchlist="Acme Corp",
+          published="Thu Oct 09 10:00:00 +0000 2026", url="https://x.com/FalconFeedsio/status/1"),
+        # a plain healthcare X post -> stays in the feeds section
+        f("x:2", "a regional hospital reports a cyber incident", source="x",
+          handle="vxunderground", sector="healthcare",
+          published="Thu Oct 09 09:00:00 +0000 2026", url="https://x.com/vxunderground/status/2"),
+    ]
+    text = render_digest_text(entries, {"x:1", "x:2"}, now=now)
+    vendors = text.split("MONITORED X FEEDS", 1)[0] if "MONITORED X FEEDS" in text else text
+    assert "VENDOR VICTIMS" in text
+    assert "Acme Corp breach" in vendors and "(via X: @FalconFeedsio)" in vendors
+    # the vendor hit is NOT duplicated in the feeds section; the hospital post is
+    feeds = text.split("MONITORED X FEEDS", 1)[1]
+    assert "regional hospital" in feeds and "Acme Corp breach" not in feeds
+
+    html = render_digest_html(entries, {"x:1", "x:2"}, now=now)
+    assert "Vendor victims" in html and "via X · @FalconFeedsio" in html
+    assert html.index("Acme Corp breach") < html.index("Monitored X feeds")

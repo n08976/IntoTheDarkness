@@ -139,12 +139,25 @@ def _is_social(f: Finding) -> bool:
 def _split_social(entries: Sequence[Finding]) -> tuple[list[Finding], list[Finding]]:
     """(posts from monitored X feeds, everything else).
 
-    X feeds are their own section: relevant posts only (a leak-site victim or a
-    watchlist vendor named in a tweet), never mixed into the victim lists below.
+    An X post that names a watchlist vendor is a priority hit, so it is left in
+    the pool to be picked up by the Vendor Victims section (marked "via X").
+    Only the rest of the relevant X posts -- healthcare headlines and the like --
+    get their own feeds section.
     """
-    social = [f for f in entries if _is_social(f)]
-    rest = [f for f in entries if not _is_social(f)]
+    social = [
+        f for f in entries
+        if _is_social(f) and not (f.item and f.item.fields.get("watchlist"))
+    ]
+    rest = [f for f in entries if f not in social]
     return social, rest
+
+
+def _via_x(f: Finding) -> str:
+    """A note naming X as the source, for a vendor hit that came from a tweet."""
+    if f.item and f.item.fields.get("source") == "x":
+        handle = f.item.fields.get("handle", "")
+        return f"  (via X: @{handle})" if handle else "  (via X)"
+    return ""
 
 
 def _social_line(f: Finding) -> str:
@@ -293,6 +306,7 @@ def render_digest_text(
             lines.append(
                 f"  !! {f.item.summary() if f.item else f.message}"
                 f"   [vendor: {vendor}]" + (f"  by {group}" if group else "")
+                + _via_x(f)
             )
             lines += _links(f)
         lines.append("")
@@ -596,7 +610,7 @@ _ENTRY = _env.from_string(
       · {{ f.item.fields.get('status') }}{% endif %}</span>
   {%- endif %}
   {%- if f.item and f.item.fields.get('source') == 'x' %}
-  <span style="font-size:11px;color:#4338ca;font-weight:600;margin-left:6px">@{{
+  <span style="font-size:11px;color:#4338ca;font-weight:600;margin-left:6px">via X · @{{
     f.item.fields.get('handle') }}</span>
   {%- endif %}
   <span style="font-size:11px;color:#6b7280;text-transform:uppercase;
