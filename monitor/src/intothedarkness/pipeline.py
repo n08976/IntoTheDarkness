@@ -345,6 +345,26 @@ class Pipeline:
             matched.append(f)
         return matched
 
+    def _all_headline_targets(self) -> set[str]:
+        """Headline (news/X) targets across the WHOLE roster, not just the ones
+        that ran this sweep.
+
+        A digest renders every discovery, including news/X items whose target
+        did not run this cycle (e.g. a watchlist-/X-only sweep). Re-evaluating
+        their watchlist flag needs to know they are headline sources, so the
+        set is read from the full config, not from this sweep's tags.
+        """
+        if not hasattr(self, "_all_heads"):
+            from .loader import load_targets
+            marks = set(self.settings.watchlist_headline_tags)
+            try:
+                roster = load_targets(self.settings.targets_file)
+                self._all_heads = {t.name for t in roster if marks & set(t.tags)}
+            except Exception:
+                self._all_heads = set()
+            self._all_heads |= self._headline_targets(getattr(self, "_tags", {}))
+        return self._all_heads
+
     def _headline_targets(self, tags_by_target: dict[str, list[str]]) -> set[str]:
         marks = set(self.settings.watchlist_headline_tags)
         return {t for t, tags in tags_by_target.items() if marks & set(tags)}
@@ -353,22 +373,32 @@ class Pipeline:
         vendors = self._vendors()
         if not vendors:
             return
-        heads = self._headline_targets(getattr(self, "_tags", {}))
+        heads = self._all_headline_targets()
+        exclude = self.settings.watchlist_headline_exclude
         for f in entries:
-            if f.item is None or f.item.fields.get("watchlist"):
+            if f.item is None:
                 continue
-            hit = watchlist.find_matches(
-                vendors, [f], heads, self.settings.watchlist_headline_exclude
-            ).get(0)
-            if hit is not None:
-                f.item.fields["watchlist"] = hit.name
+            if f.target in heads:
+                # Headline sources (X/news) are re-evaluated against the CURRENT
+                # rules every report, overriding a flag persisted under looser
+                # ones -- so tightening the matcher retires old false positives
+                # instead of leaving them flagged forever in the saved findings.
+                hit = watchlist.find_matches(vendors, [f], heads, exclude).get(0)
+                if hit is not None:
+                    f.item.fields["watchlist"] = hit.name
+                else:
+                    f.item.fields.pop("watchlist", None)
+            elif not f.item.fields.get("watchlist"):
+                hit = watchlist.find_matches(vendors, [f], heads, exclude).get(0)
+                if hit is not None:
+                    f.item.fields["watchlist"] = hit.name
 
     def _add_observed_vendor_victims(self, entries: list[Finding]) -> list[Finding]:
         """Vendor listings the rules never reported, found in raw observations."""
         vendors = self._vendors()
         if not vendors:
             return entries
-        heads = self._headline_targets(getattr(self, "_tags", {}))
+        heads = self._all_headline_targets()
         floors = getattr(self, "_floors", None) or {}
         known = {f.item.title.strip().lower() for f in entries if f.item}
         extra: dict[str, Finding] = {}

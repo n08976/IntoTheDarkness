@@ -119,7 +119,8 @@ def _links(finding: Finding) -> list[str]:
     if item is None:
         return lines
     if item.url:
-        lines.append(f"      leak:    {item.url}")
+        label = "post" if item.fields.get("source") == "x" else "leak"
+        lines.append(f"      {label}:    {item.url}")
     website = item.fields.get("website")
     if website:
         lines.append(f"      website: {website}")
@@ -136,19 +137,28 @@ def _is_social(f: Finding) -> bool:
     return bool(f.item and f.item.fields.get("source") == "x")
 
 
-def _split_social(entries: Sequence[Finding]) -> tuple[list[Finding], list[Finding]]:
-    """(posts from monitored X feeds, everything else).
+def _split_social(
+    entries: Sequence[Finding], keep_sectors: Sequence[str] = ("healthcare",)
+) -> tuple[list[Finding], list[Finding]]:
+    """(relevant posts from monitored X feeds, everything else).
 
-    An X post that names a watchlist vendor is a priority hit, so it is left in
+    An X post that names a watchlist vendor is a priority hit, so it stays in
     the pool to be picked up by the Vendor Victims section (marked "via X").
-    Only the rest of the relevant X posts -- healthcare headlines and the like --
-    get their own feeds section.
+    A non-watchlist X post is kept only if its sector is one we carry (a
+    healthcare headline); any other X post -- a product-CVE story, say -- is
+    dropped from the report entirely rather than padding a feeds section.
     """
-    social = [
-        f for f in entries
-        if _is_social(f) and not (f.item and f.item.fields.get("watchlist"))
-    ]
-    rest = [f for f in entries if f not in social]
+    keep = {s.lower() for s in keep_sectors} if keep_sectors else set()
+    social: list[Finding] = []
+    rest: list[Finding] = []
+    for f in entries:
+        if not _is_social(f):
+            rest.append(f)
+        elif f.item and f.item.fields.get("watchlist"):
+            rest.append(f)                                   # -> Vendor Victims
+        elif not keep or _sector_of(f).lower() in keep:
+            social.append(f)                                 # -> feeds section
+        # else: a non-relevant X post, dropped
     return social, rest
 
 
@@ -267,7 +277,7 @@ def render_digest_text(
     now: datetime | None = None,
 ) -> str:
     """New first, then Recent, then a compact Previous list out to window_days."""
-    social, entries = _split_social(entries)
+    social, entries = _split_social(entries, carry)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     pwin = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
     new = [f for f in entries if f.item and f.item.key in new_keys]
@@ -621,7 +631,8 @@ _ENTRY = _env.from_string(
   {%- if f.item and (f.item.url or f.item.fields.get('website') or f.item.fields.get('also')) %}
   <div style="font-size:12px;margin-top:1px">
     {%- if f.item.url %}
-    <a href="{{ f.item.url }}" style="color:#b91c1c;text-decoration:none">leak</a>
+    <a href="{{ f.item.url }}" style="color:#b91c1c;text-decoration:none">{{
+      'read on X' if f.item.fields.get('source') == 'x' else 'leak' }}</a>
     {%- endif %}
     {%- if f.item.url and f.item.fields.get('website') %}
     <span style="color:#d1d5db"> · </span>
@@ -667,7 +678,7 @@ def render_digest_html(
 ) -> str:
     from ..models import utcnow
 
-    social, entries = _split_social(entries)
+    social, entries = _split_social(entries, carry)
     vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
     new = [f for f in entries if f.item and f.item.key in new_keys]
     aged = [f for f in entries if not (f.item and f.item.key in new_keys)]

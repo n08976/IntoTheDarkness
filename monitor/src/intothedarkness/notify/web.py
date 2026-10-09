@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .. import diag
 from .base import Message, Notifier, register
-from .defang import defang
+from .defang import defang_onion
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +85,9 @@ class WebNotifier(Notifier):
 
         body = message.html or f"<pre>{message.text}</pre>"
         if s.site_defang:
-            body = defang(body)
+            # Only hidden-service links are neutralised; clearnet links (X posts,
+            # news, victim sites) stay clickable so the reader can open them.
+            body = defang_onion(body)
         # The report's own footer names the product; the page names nothing.
         body = re.sub(r"IntoTheDarkness\s*·\s*", "", body)
 

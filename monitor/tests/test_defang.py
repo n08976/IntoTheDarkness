@@ -1,4 +1,4 @@
-from intothedarkness.notify.defang import defang, needs_defang, split_recipients
+from intothedarkness.notify.defang import defang, defang_onion, needs_defang, split_recipients
 
 
 def test_defang_breaks_scheme_and_tld_and_nothing_else():
@@ -26,3 +26,11 @@ def test_split_keeps_order_and_sends_nobody_twice():
     people = ["a@home.example", "b@hospital.example", "c@x.org"]
     raw, fanged = split_recipients(people, ["hospital.example"])
     assert (raw, fanged) == (["a@home.example", "c@x.org"], ["b@hospital.example"])
+
+
+def test_defang_onion_breaks_only_hidden_service_links():
+    onion = "http://abcdef234567.onion/victim/acme"
+    out = defang_onion(f'see <a href="{onion}">leak</a> and https://x.com/FalconFeedsio/status/9')
+    assert "hxxp://abcdef234567[.]onion/victim/acme" in out   # onion neutralised
+    assert "https://x.com/FalconFeedsio/status/9" in out       # clearnet left clickable
+    assert ".onion" not in out.replace("[.]onion", "")         # no live .onion remains

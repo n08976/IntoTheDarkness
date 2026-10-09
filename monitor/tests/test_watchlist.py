@@ -98,3 +98,30 @@ def test_excluded_vendors_are_skipped_in_headlines_but_not_on_leak_sites():
     hits = find_matches(vendors, findings, headline_targets={"news-x"},
                         headline_exclude=["Microsoft"])
     assert {i: v.name for i, v in hits.items()} == {1: "Microsoft", 2: "Beckman Coulter"}
+
+
+def test_product_advisory_headlines_are_not_victim_claims():
+    from intothedarkness.watchlist import mentioned_in
+
+    # the vendor is the subject of a flaw advisory, not a breached org
+    citrix = vendor("Citrix")
+    assert not mentioned_in(
+        citrix, "CISA flags new Citrix NetScaler zero-day as actively exploited"
+    )
+    anthropic = vendor("Anthropic")
+    assert not mentioned_in(
+        anthropic, "CVE-2026-61500 Rejetto HTTP File Server unauthenticated RCE; Anthropic noted"
+    )
+    # but a genuine breach claim about the same company still matches
+    assert mentioned_in(citrix, "Ransomware group claims Citrix as a victim, leaks stolen data")
+
+
+def test_common_word_single_names_do_not_match_in_headlines():
+    from intothedarkness.watchlist import mentioned_in
+
+    assert not mentioned_in(
+        vendor("Clear"), "SilentRansom claims two major US law firms, data leaked"
+    )
+    assert not mentioned_in(vendor("Monday"), "FBI removes Accenture contractor after a breach")
+    # a real, distinctive single-word vendor still matches on a victim claim
+    assert mentioned_in(vendor("Dexcom"), "ShinyHunters leaked DexCom data on its leak site")

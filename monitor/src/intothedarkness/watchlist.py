@@ -65,12 +65,31 @@ class Vendor:
 
 
 # A headline names a vendor incidentally all the time ("Microsoft patches
-# Excel"). One of these words alongside the name is what makes it a match.
+# Excel"). One of these words alongside the name is what makes it a victim
+# claim. Kept deliberately tight -- the generic security-news vocabulary
+# ("attack", "exposed", "hackers", "vulnerability") let a vendor merely cited
+# in any breach story match, which over ten busy feeds was mostly noise.
 INCIDENT_WORDS = {
-    "breach", "breached", "ransomware", "leak", "leaked", "leaks", "hack", "hacked",
-    "hackers", "attack", "attacked", "cyberattack", "exposed", "exposure", "stolen",
-    "extortion", "compromised", "compromise", "intrusion", "incident", "victim",
-    "victims", "dump", "dumped", "infostealer", "credentials", "claims", "claimed",
+    "breach", "breached", "ransomware", "ransom", "leak", "leaked", "leaks",
+    "hacked", "cyberattack", "stolen", "extortion", "extorted", "compromised",
+    "victim", "victims", "dump", "dumped", "exfiltrated", "exfiltration",
+    "listed", "claims", "claimed",
+}
+# A headline about a product's flaw is not a victim claim: the vendor is the
+# subject of an advisory, not a breached organisation. Any of these present
+# drops the match (killed the Citrix/Anthropic/Rejetto CVE false positives).
+ADVISORY_WORDS = {
+    "cve", "zero", "zeroday", "0day", "rce", "vulnerability", "vulnerabilities",
+    "vuln", "patch", "patched", "patches", "advisory", "exploit", "exploited",
+    "exploits", "flaw", "flaws", "poc", "bug", "firmware", "netscaler",
+    "unauthenticated", "mitigation",
+}
+# Single-word vendor names that are also ordinary news words: never a headline
+# match on their own ("CLEAR", "Monday"). Multi-word names containing them are
+# unaffected; add more via ITD_WATCHLIST_HEADLINE_EXCLUDE.
+HEADLINE_STOPWORDS = {
+    "clear", "monday", "tuesday", "wednesday", "thursday", "friday",
+    "now", "next", "open", "sure", "global", "first", "united",
 }
 HEADLINE_MIN_WORD = 5   # "Dell", "GE", "Lap" inside a sentence are not a mention
 
@@ -89,13 +108,21 @@ def mentioned_in(vendor: Vendor, headline: str) -> bool:
     a headline keeps its words.
     """
     tokens = tuple(_TOKEN.findall(headline.lower().replace("&", " and ")))
-    if not tokens or not (set(tokens) & INCIDENT_WORDS):
+    if not tokens:
+        return False
+    tokenset = set(tokens)
+    if tokenset & ADVISORY_WORDS:          # a product-flaw story, not a victim
+        return False
+    if not (tokenset & INCIDENT_WORDS):    # no victim-claim cue
         return False
     for form in vendor.forms:
         if not form:
             continue
-        if len(form) == 1 and len(form[0]) < HEADLINE_MIN_WORD:
-            continue
+        if len(form) == 1:
+            if len(form[0]) < HEADLINE_MIN_WORD:
+                continue
+            if form[0] in HEADLINE_STOPWORDS:   # ordinary word, not a vendor here
+                continue
         if _contains(tokens, form):
             return True
     return False

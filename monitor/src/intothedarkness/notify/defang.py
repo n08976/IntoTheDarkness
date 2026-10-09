@@ -24,6 +24,24 @@ def defang(text: str) -> str:
     return _TLD.sub(r"[.]\1", _SCHEME.sub("hxxp://", text))
 
 
+# A .onion URL anywhere in a string -- scheme + the ".onion" of the host.
+_ONION_URL = re.compile(r"https?://([a-z2-7-]+(?:\.[a-z0-9-]+)*\.onion)", re.I)
+
+
+def defang_onion(text: str) -> str:
+    """De-fang only hidden-service URLs, leaving clearnet links clickable.
+
+    The public site keeps .onion links unclickable (you cannot reach them from
+    a normal browser, and a live onion link on an indexable page is not wanted)
+    while X, news and victim-site links stay clickable so the reader can open
+    the article.
+    """
+    def _break(m: re.Match[str]) -> str:
+        return "hxxp://" + m.group(1).replace(".onion", "[.]onion")
+
+    return _ONION_URL.sub(_break, text)
+
+
 def needs_defang(address: str, rules: Sequence[str]) -> bool:
     """Match an address against configured addresses or bare domains."""
     addr = address.strip().lower()
