@@ -49,3 +49,11 @@ def test_a_failed_publish_stays_open_until_a_good_one(tmp_path):
     assert [e.kind for e in diag.open_issues(diag.load(p))] == ["publish-failed"]
     diag.record(p, "publish-ok", "Site published")
     assert diag.open_issues(diag.load(p)) == []
+
+
+def test_tor_bootstrapping_raises_the_outage_banner_until_a_sweep_completes(tmp_path):
+    p = tmp_path / "issues.jsonl"
+    diag.record(p, "tor-bootstrapping", "Tor is up and still bootstrapping")
+    assert [e.kind for e in diag.open_issues(diag.load(p))] == ["tor-bootstrapping"]
+    diag.record(p, "sweep-ok", "16 target(s)")
+    assert diag.open_issues(diag.load(p)) == []

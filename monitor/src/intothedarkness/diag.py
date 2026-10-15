@@ -21,6 +21,9 @@ from pathlib import Path
 RESOLVES: dict[str, set[str]] = {
     # an event of the key kind is resolved by any later event in the set
     "tor-down": {"tor-recovered", "sweep-ok", "sweep-partial"},
+    # Tor is up but still bootstrapping: a degraded state worth the outage
+    # banner, cleared as soon as a circuit is established or a sweep completes.
+    "tor-bootstrapping": {"tor-recovered", "sweep-ok", "sweep-partial"},
     # another process holds the SOCKS port (a distro tor after a reboot, say):
     # nothing the rebuild can do until the port is freed
     "tor-port-conflict": {"tor-recovered", "sweep-ok", "sweep-partial"},
