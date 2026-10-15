@@ -547,6 +547,25 @@ class Pipeline:
         )
         return Message(subject=subject, text=text, html=html, findings=group)
 
+    def publish_site(self, targets: Sequence[Target] | None = None) -> None:
+        """Republish the website from stored data, without scraping.
+
+        The page content is built from the local DB (discoveries), which needs
+        no Tor, so the site can stay current with a diagnostics banner even
+        while scraping is degraded by a Tor outage. Email is untouched here --
+        only the web channel is published.
+        """
+        from .notify import get_notifier
+
+        notifier = get_notifier("web", self.settings)
+        ok, why = notifier.available()
+        if not ok:
+            raise RuntimeError(why)
+        if targets is not None:
+            self._tags = {t.name: t.tags for t in targets}
+            self._floors = {t.name: t.base_url for t in targets if t.base_url}
+        notifier.send(self._message_for(notifier, [], RunReport(), channel="web"))
+
     def _send_daily_digest(self, targets: Sequence[Target], report: RunReport) -> None:
         """Send the full report to every inbox channel even though nothing is new.
 

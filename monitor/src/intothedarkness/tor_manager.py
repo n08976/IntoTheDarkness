@@ -448,6 +448,15 @@ class ManagedTor:
             log_handle.close()
             raise TorLaunchError(f"could not start {binary}: {exc}") from exc
 
+        # Record the pid as soon as tor is launched, not only once it reaches
+        # 100%. A slow bootstrap can span several cron cycles; writing the pid
+        # now lets a later run discover and reuse this process (and lets the
+        # scheduler leave it alone to finish) instead of killing and restarting
+        # it every cycle, which reset the progress and skipped the sweep.
+        self.pid_file.write_text(
+            f"{self.process.pid} {self.socks_port} {self.control_port}\n"
+        )
+
         # tor can go quiet for minutes on a throttled network, and a blocking
         # readline() would ignore the deadline entirely. Read on a thread and
         # poll with a timeout so the caller's timeout actually means something.
@@ -497,6 +506,14 @@ class ManagedTor:
         finally:
             log_handle.close()
 
+        if percent >= 25:
+            # Past the hard-block threshold: it is bootstrapping, just slow.
+            # Leave it running (pid file already written) so the next cycle can
+            # pick it up once it finishes, rather than restarting from zero.
+            raise TorLaunchError(
+                f"tor reached {percent}% in {timeout:.0f}s and is still "
+                "bootstrapping; left running to finish."
+            )
         self.stop()
         raise TorLaunchError(
             f"tor reached {percent}% in {timeout:.0f}s and gave up. "

@@ -201,6 +201,23 @@ def init(
 
 
 @app.command()
+def publish(
+    targets_file: Path = typer.Option(None, "--targets", help="Path to targets YAML."),
+) -> None:
+    """Republish the website from stored data, without scraping.
+
+    For when Tor is down: the page is rebuilt from the local database and the
+    diagnostics banner shows the outage, so the site never silently goes stale.
+    """
+    settings = get_settings()
+    targets, rules = _load(targets_file, None)
+    pipeline = Pipeline(repo=_repo(), classifier=load_sectors(settings.sectors_file))
+    pipeline.rules = rules
+    pipeline.publish_site(targets)
+    console.print("site republished from stored data")
+
+
+@app.command()
 def run(
     target: list[str] = typer.Option(None, "--target", "-t", help="Run only these targets."),
     tag: list[str] = typer.Option(None, "--tag", help="Run only targets with these tags."),
@@ -1674,16 +1691,20 @@ def tor_up(
     settings = get_settings()
 
     if bridges:
-        if bridges not in BRIDGE_PRESETS:
-            _fail(f"--bridges must be one of {', '.join(BRIDGE_PRESETS)}")
-        lines = bundled_bridges(settings, bridges)
+        kinds = [k.strip() for k in bridges.split(",") if k.strip()]
+        bad = [k for k in kinds if k not in BRIDGE_PRESETS]
+        if bad:
+            _fail(f"--bridges must be one or more of {', '.join(BRIDGE_PRESETS)} (comma-separated)")
+        lines: list[str] = []
+        for kind in kinds:
+            lines.extend(bundled_bridges(settings, kind))
         if not lines:
             _fail(
                 f"no built-in {bridges} bridges found — run `itd tor install` "
                 "to fetch the Expert Bundle that carries them"
             )
         settings.tor_bridges = lines
-        console.print(f"[dim]using {len(lines)} built-in {bridges} bridge(s)[/dim]")
+        console.print(f"[dim]using {len(lines)} built-in bridge(s): {', '.join(kinds)}[/dim]")
 
     managed = ManagedTor(settings=settings)
 

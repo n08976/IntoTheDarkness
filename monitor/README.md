@@ -694,6 +694,21 @@ the floor, since that is the cron cadence). Each sweep starts after a random
 delay of up to `ITD_JITTER_SECONDS` (default 240) so requests do not land on
 the clock face.
 
+Tor is treated as a persistent daemon (hardened 2026-10-15). A bootstrap over
+meek/snowflake can take minutes; the wrapper no longer tears Tor down and
+rebuilds it every cycle when it is not yet routing (which reset the progress
+and skipped most sweeps during a flaky spell). A tor that is up and still
+bootstrapping is left to finish across cycles (`ITD_TOR_BOOTSTRAP_GRACE`,
+default 30 min); a rebuild runs only when the process is gone or it has been
+unroutable past the grace window, no more often than `ITD_TOR_REBUILD_COOLDOWN`
+(20 min), and through **multiple bridges across two transports**
+(`ITD_TOR_BRIDGES`, default `meek,snowflake`). The daily proof-of-life digest
+is **owed per day**: if Tor is down at the digest hour, the next full sweep
+that succeeds that day still sends it, so a bad morning does not cost the
+report. During an outage the public page is **republished from the stored
+database** (`itd publish`, no Tor) at most hourly, with the Diagnostics banner
+showing the outage, so the site never silently goes stale.
+
 Before every sweep the script tests Tor with a real SOCKS5 CONNECT — not a pid
 check, because a Tor process can be running, listening and bootstrapped and
 still unable to route — and if the circuit is dead, tears Tor down and rebuilds
