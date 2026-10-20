@@ -70,6 +70,17 @@ class Settings(BaseSettings):
     # Keep onion hostnames out of logs and error strings.
     redact_onion_in_logs: bool = True
 
+    # A few leak sites sit behind a server-side "access queue"/anti-DDoS gate
+    # (CL0P's, for one): early requests return a holding page carrying a
+    # ``Refresh`` header and a session cookie, and only patience — never
+    # JavaScript — clears it. Requesting faster than the gate allows gets the
+    # Tor path banned. Targets that opt in (``wait_for_queue``) sit the gate out
+    # within these caps; a plain target is unaffected.
+    queue_wait_rounds: int = 6         # holding pages to sit through before giving up
+    queue_refresh_cap: float = 30.0    # cap on honouring any single Refresh header
+    queue_wait_budget: float = 180.0   # total seconds to spend clearing one gate
+    queue_ban_rotations: int = 2       # fresh circuits to try after a path ban
+
     # --- Content retention ---------------------------------------------------
     # "hash" records only a digest; "store" writes the body to data/snapshots.
     # Targets may override this. Monitoring hidden services can pull in material

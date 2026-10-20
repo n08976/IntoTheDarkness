@@ -106,6 +106,10 @@ class Target(BaseModel):
     content_mode: str | None = None
     # Send the whole current state once, on the first run, then deltas only.
     report_baseline: bool = False
+    # Sit through a server-side access-queue / anti-DDoS gate before scraping
+    # (see Settings.queue_wait_*). Only for sites that gate every visitor this
+    # way; it adds a bounded wait to the fetch and must not be set casually.
+    wait_for_queue: bool = False
     # Optional sector label applied to every item this target produces, used
     # when a target covers a single industry.
     sector: str | None = None

@@ -160,3 +160,73 @@ def test_post_body_and_params_are_forwarded(fetcher):
     request = route.calls[0].request
     assert request.url.params["q"] == "x"
     assert request.content == b'{"a":1}'
+
+
+# --- access-queue / anti-DDoS gate (CL0P-style leak sites) -------------------
+
+_GATE = (
+    "<html><head><title>CL0P^_- LEAKS Access Queue</title></head>"
+    "<body>You have been placed in a queue, awaiting forwarding.</body></html>"
+)
+_REAL = "<html><head><title>HOME | CL0P^_- LEAKS</title></head><body>victims</body></html>"
+_BAN = "403 DDOS filter killed your path. (You probably sent too many requests at once)."
+
+
+@respx.mock
+def test_wait_for_queue_sits_through_the_gate_then_returns_content(settings, monkeypatch):
+    monkeypatch.setattr("intothedarkness.scrapers.fetch.time.sleep", lambda *_: None)
+    route = respx.get("https://e.com/").mock(
+        side_effect=[
+            httpx.Response(200, text=_GATE, headers={"Refresh": "5"}),
+            httpx.Response(200, text=_GATE, headers={"Refresh": "1"}),
+            httpx.Response(200, text=_REAL),
+        ]
+    )
+    with Fetcher(settings) as f:
+        resp = f.get("https://e.com/", wait_for_queue=True)
+    assert "HOME" in resp.text
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_queue_gate_is_returned_as_is_without_the_flag(settings):
+    route = respx.get("https://e.com/").mock(
+        return_value=httpx.Response(200, text=_GATE, headers={"Refresh": "5"})
+    )
+    with Fetcher(settings) as f:
+        resp = f.get("https://e.com/")
+    assert "Access Queue" in resp.text  # no waiting, no extra requests
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_queue_ban_rotates_the_circuit_then_recovers(settings, monkeypatch):
+    # The ban remedy ("grab a new identity") only makes sense over Tor, so this
+    # one runs on an onion where _reset_gate asks for a fresh circuit.
+    onion = "http://clopofffr7tth6hsvxx3cys4qkshrbbiitnxfwts6hj64mtnaovjieyd.onion/"
+    monkeypatch.setattr("intothedarkness.scrapers.fetch.time.sleep", lambda *_: None)
+    rotations: list[int] = []
+    respx.get(onion).mock(
+        side_effect=[
+            httpx.Response(200, text=_GATE, headers={"Refresh": "2"}),
+            httpx.Response(200, text=_BAN),
+            httpx.Response(200, text=_REAL),
+        ]
+    )
+    with Fetcher(settings) as f:
+        monkeypatch.setattr(f.tor, "new_circuit", lambda: (rotations.append(1), (True, "ok"))[1])
+        resp = f.get(onion, wait_for_queue=True)
+    assert "HOME" in resp.text
+    assert rotations == [1]  # the ban, and only the ban, asked for a new circuit
+
+
+@respx.mock
+def test_queue_that_never_clears_fails_within_the_budget(settings, monkeypatch):
+    monkeypatch.setattr("intothedarkness.scrapers.fetch.time.sleep", lambda *_: None)
+    route = respx.get("https://e.com/").mock(
+        return_value=httpx.Response(200, text=_GATE, headers={"Refresh": "1"})
+    )
+    with Fetcher(settings) as f, pytest.raises(FetchError, match="access queue"):
+        f.get("https://e.com/", wait_for_queue=True)
+    # bounded: the first request plus queue_wait_rounds retries, no more
+    assert route.call_count == 1 + settings.queue_wait_rounds

@@ -10,6 +10,7 @@ per-target override.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 import urllib.robotparser
@@ -35,6 +36,43 @@ CIRCUIT_ERRORS = (
     httpx.RemoteProtocolError,
     httpx.ProxyError,
 )
+
+
+# Phrases a server-side access-queue / anti-DDoS gate puts on its holding pages
+# (CL0P's leak site, for one). They sit near the top of the document — a title
+# or an opening sentence — so scanning the head is enough.
+_QUEUE_MARKERS = (
+    "access queue",
+    "awaiting forwarding to the platform",
+    "you have been placed in a queue",
+    "ddos protection",
+    "assigning session",
+)
+# What the gate returns when it decides a client is requesting too fast: the
+# path is cut and the remedy is a new Tor identity, not another retry.
+_BAN_MARKER = "ddos filter killed your path"
+_REFRESH_SECONDS = re.compile(r"\s*(\d+)")
+
+
+def _gate_kind(resp: Response) -> str | None:
+    """Classify a holding response: ``"ban"``, ``"wait"``, or ``None`` (content).
+
+    A ban needs a fresh circuit; a plain wait just needs patience and the gate's
+    own ``Refresh`` cadence. Real content matches neither and returns ``None``.
+    """
+    low = (resp.text or "")[:4000].lower()
+    if _BAN_MARKER in low:
+        return "ban"
+    if any(marker in low for marker in _QUEUE_MARKERS):
+        return "wait"
+    return None
+
+
+def _refresh_seconds(headers: dict[str, str], default: float) -> float:
+    """Seconds the gate's ``Refresh`` header asks us to wait before retrying."""
+    raw = headers.get("refresh") or headers.get("Refresh") or ""
+    match = _REFRESH_SECONDS.match(raw)
+    return float(match.group(1)) if match else default
 
 
 class Network(StrEnum):
@@ -266,12 +304,19 @@ class Fetcher:
         network: str | Network = Network.AUTO,
         max_redirects: int = 5,
         skip_robots: bool = False,
+        wait_for_queue: bool = False,
     ) -> Response:
         """Fetch a URL, following redirects only within the same network.
 
         ``skip_robots`` is for an authenticated API read that mirrors what the
         site's own browser client does (the X timeline endpoints), where the
         generic crawler robots rules do not apply.
+
+        ``wait_for_queue`` sits through a server-side access-queue / anti-DDoS
+        gate that fronts the real page (see :func:`_gate_kind`), honouring the
+        gate's own ``Refresh`` cadence within the configured budget. The gate's
+        session cookie lives on the per-network client, so re-requesting the
+        same URL is what advances through it.
         """
         resolved = resolve_network(url, network)
 
@@ -280,6 +325,27 @@ class Fetcher:
             if not check.ok:
                 raise FetchError(f"{self._redact(url)}: {check.reason}")
 
+        resp = self._follow(method, url, resolved, network, headers, params, body,
+                             max_redirects, skip_robots)
+        if wait_for_queue:
+            resp = self._clear_queue(
+                resp, method, url, resolved, network, headers, params, body, skip_robots
+            )
+        return resp
+
+    def _follow(
+        self,
+        method: str,
+        url: str,
+        resolved: Network,
+        network: str | Network,
+        headers: dict[str, str] | None,
+        params: dict[str, str] | None,
+        body: str | None,
+        max_redirects: int,
+        skip_robots: bool,
+    ) -> Response:
+        """One request, chasing redirects but never across the network boundary."""
         current = url
         for hop in range(max_redirects + 1):
             resp = self._request_once(
@@ -310,6 +376,71 @@ class Fetcher:
                 method, body = "GET", None
 
         raise FetchError(f"too many redirects starting at {self._redact(url)}")
+
+    def _clear_queue(
+        self,
+        resp: Response,
+        method: str,
+        url: str,
+        resolved: Network,
+        network: str | Network,
+        headers: dict[str, str] | None,
+        params: dict[str, str] | None,
+        body: str | None,
+        skip_robots: bool,
+    ) -> Response:
+        """Sit through an access-queue gate until the real page is served.
+
+        Each holding page is re-requested on the same client so its session
+        cookie carries forward. We wait the gate's own ``Refresh`` cadence
+        (capped), and a ban — the gate cutting the path for impatience — is met
+        with a fresh circuit rather than another immediate retry. Both the
+        number of rounds and the total time are bounded so a stuck gate fails
+        the target instead of hanging the sweep.
+        """
+        kind = _gate_kind(resp)
+        if kind is None:
+            return resp
+
+        deadline = time.monotonic() + self.settings.queue_wait_budget
+        rotations_left = self.settings.queue_ban_rotations
+        for _ in range(self.settings.queue_wait_rounds):
+            if time.monotonic() >= deadline:
+                break
+            if kind == "ban":
+                if rotations_left <= 0:
+                    raise FetchError(
+                        f"{self._redact(url)}: access-queue path banned, out of retries"
+                    )
+                rotations_left -= 1
+                self._reset_gate(resolved)
+                wait = min(self.settings.queue_refresh_cap, 10.0)
+            else:
+                wait = min(
+                    _refresh_seconds(resp.headers, 15.0), self.settings.queue_refresh_cap
+                )
+            log.debug(
+                "access queue (%s): waiting %.0fs then retrying %s",
+                kind, wait, self._redact(url),
+            )
+            time.sleep(wait)
+            resp = self._follow(
+                method, url, resolved, network, headers, params, body, 5, skip_robots
+            )
+            kind = _gate_kind(resp)
+            if kind is None:
+                return resp
+
+        raise FetchError(f"{self._redact(url)}: access queue did not clear within budget")
+
+    def _reset_gate(self, network: Network) -> None:
+        """Recover from a path ban: new Tor identity, drop the stale gate cookie."""
+        if network is Network.TOR:
+            ok, why = self.tor.new_circuit()
+            log.debug("access-queue ban: %s", why)
+        client = self._clients.get(network)
+        if client is not None:
+            client.cookies.clear()
 
     def _request_once(
         self,

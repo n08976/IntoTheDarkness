@@ -108,6 +108,7 @@ class DlsScraper(Scraper):
             target.params,
             target.body,
             network=target.network,
+            wait_for_queue=target.wait_for_queue,
         )
         soup = _soup(resp.text)
         sel: Selectors = target.selectors
