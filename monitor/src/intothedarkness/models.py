@@ -97,6 +97,11 @@ class Target(BaseModel):
     # Resolves relative links a source returns. An API that reports
     # "Companies/acme" is useless in an email without its site prefix.
     base_url: str | None = None
+    # Other addresses for the same site, tried in order when ``url`` cannot be
+    # fetched. Leak sites move and keep several onions; a dead primary once
+    # left a site unread for two weeks. Items are keyed on the victim, not the
+    # host, so switching mirror does not re-report anything.
+    mirrors: list[str] = Field(default_factory=list)
     # Which network to fetch over: auto (.onion implies Tor), direct, or tor.
     # An explicit value makes a misrouted target fail loudly instead of leaking
     # a hidden-service lookup onto clearnet DNS.

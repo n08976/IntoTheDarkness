@@ -612,3 +612,55 @@ def test_email_every_sweep_restores_a_mail_per_sweep(settings, repo):
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+class MirrorScraper(Scraper):
+    """Fails on the primary address, answers on any other."""
+
+    name = "mirrored"
+    seen: list[str] = []
+
+    def scrape(self, target: Target) -> list[Item]:
+        MirrorScraper.seen.append(target.url)
+        if "primary" in target.url or "alsobroken" in target.url:
+            raise RuntimeError("Host unreachable")
+        return [Item(key="a", target=target.name, title="Alpha", url="/post/a")]
+
+
+def test_a_dead_primary_address_falls_back_to_the_first_live_mirror(
+    settings, repo, monkeypatch, tmp_path
+):
+    # A leak site that moved left its target failing for two weeks while the
+    # new address sat in a list nobody tried.
+    SCRAPERS["mirrored"] = MirrorScraper
+    MirrorScraper.seen = []
+    settings.issues_file = tmp_path / "issues.jsonl"
+    p = pipeline(settings, repo)
+    monkeypatch.setattr(p, "_live_mirrors", lambda t: [m for m in t.mirrors if "dead" not in m])
+    try:
+        t = target(
+            scraper="mirrored", url="http://primary.onion/",
+            base_url="http://primary.onion/blog",
+            mirrors=["http://dead.onion/", "http://alsobroken.onion/", "http://live.onion/"],
+        )
+        items = p.scrape_target(t, None)
+        assert [i.title for i in items] == ["Alpha"]
+        assert MirrorScraper.seen == [
+            "http://primary.onion/", "http://alsobroken.onion/", "http://live.onion/",
+        ]
+        assert "mirror-in-use" in settings.issues_file.read_text()
+    finally:
+        SCRAPERS.pop("mirrored", None)
+
+
+def test_when_every_mirror_is_down_the_error_says_so(settings, repo, monkeypatch):
+    SCRAPERS["mirrored"] = MirrorScraper
+    MirrorScraper.seen = []
+    p = pipeline(settings, repo)
+    monkeypatch.setattr(p, "_live_mirrors", lambda t: [])
+    try:
+        t = target(scraper="mirrored", url="http://primary.onion/", mirrors=["http://dead.onion/"])
+        with pytest.raises(RuntimeError, match=r"1 mirror\(s\) also unreachable"):
+            p.scrape_target(t, None)
+    finally:
+        SCRAPERS.pop("mirrored", None)

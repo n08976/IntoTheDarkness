@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # Tor is slower and more variable than clearnet: wait longer, retry less.
     tor_timeout: float = 90.0
     tor_max_retries: int = 2
+    # Seconds to wait for each of a target's mirrors to answer a SOCKS CONNECT
+    # after its primary address failed. Mirrors are probed in parallel, so a
+    # site that is down everywhere costs one such wait, not one per mirror.
+    mirror_probe_timeout: float = 45.0
     # Delay between *any* two requests over Tor. The shared circuit is the
     # bottleneck, not the remote host, so this is separate from per_host_delay.
     tor_delay: float = 2.0

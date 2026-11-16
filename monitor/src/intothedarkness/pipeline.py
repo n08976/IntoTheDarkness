@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urljoin, urlparse
@@ -27,6 +28,7 @@ from .notify import (
 from .notify.links import merge_links
 from .scrapers import Fetcher, get_scraper
 from .storage import Repository, SnapshotStore, get_db
+from .tor import probe_socks, redact
 
 log = logging.getLogger(__name__)
 
@@ -113,10 +115,68 @@ class Pipeline:
         # Scrapers that can label sectors are handed the classifier; the rest
         # ignore it.
         scraper.classifier = self.classifier
-        items = scraper.scrape(target)
+        try:
+            items = scraper.scrape(target)
+        except Exception as exc:
+            if not target.mirrors:
+                raise
+            # The primary address is unreachable: use the first mirror that
+            # answers. Probing is one cheap CONNECT each, in parallel, so a
+            # site that is down everywhere does not stall the sweep.
+            live = self._live_mirrors(target)
+            if not live:
+                raise RuntimeError(
+                    f"{exc} ({len(target.mirrors)} mirror(s) also unreachable)"
+                ) from exc
+            items, last = None, exc
+            for mirror in live:
+                try:
+                    items = scraper.scrape(self._on_mirror(target, mirror))
+                except Exception as mirror_exc:
+                    last = mirror_exc
+                    continue
+                log.warning(
+                    "target %s: primary address failed, read from mirror %s",
+                    target.name, redact(mirror),
+                )
+                diag.record(
+                    self.settings.issues_file,
+                    "mirror-in-use",
+                    f"{target.name}: primary address unreachable, read from a mirror",
+                    f"mirror: {mirror}\nprimary error: {exc}",
+                )
+                break
+            if items is None:
+                raise last from exc
         items = [self._enrich(target, item) for item in items]
         log.debug("target %s produced %d item(s)", target.name, len(items))
         return items
+
+    def _live_mirrors(self, target: Target) -> list[str]:
+        """Mirrors that accept a connection right now, in configured order."""
+        proxy = urlparse(self.settings.tor_socks_url)
+
+        def answers(mirror: str) -> bool:
+            u = urlparse(mirror)
+            port = u.port or (443 if u.scheme == "https" else 80)
+            return probe_socks(
+                proxy.hostname or "127.0.0.1", proxy.port or 9050,
+                through=u.hostname or "", through_port=port,
+                timeout=self.settings.mirror_probe_timeout,
+            ).usable
+
+        with ThreadPoolExecutor(max_workers=max(1, len(target.mirrors))) as pool:
+            alive = list(pool.map(answers, target.mirrors))
+        return [m for m, ok in zip(target.mirrors, alive, strict=True) if ok]
+
+    @staticmethod
+    def _on_mirror(target: Target, mirror: str) -> Target:
+        """The same target read from another address; links follow the host."""
+        update: dict[str, object] = {"url": mirror, "mirrors": []}
+        if target.base_url:
+            old, new = urlparse(target.base_url), urlparse(mirror)
+            update["base_url"] = old._replace(scheme=new.scheme, netloc=new.netloc).geturl()
+        return target.model_copy(update=update)
 
     def _enrich(self, target: Target, item: Item) -> Item:
         """Bound the stored body and make sure every item carries a sector."""
