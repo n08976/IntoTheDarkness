@@ -13,7 +13,7 @@ from . import diag, watchlist
 from .alerting.rules import RuleSet
 from .config import Settings, get_settings
 from .enrich import SectorClassifier, SectorIndex
-from .models import Finding, FindingKind, Item, Severity, Target
+from .models import Finding, FindingKind, Item, Severity, Target, utcnow
 from .notify import (
     Message,
     Notifier,
@@ -291,8 +291,15 @@ class Pipeline:
             if hot:
                 self._send_urgent(hot, report, dry_run=dry_run)
             regular = [f for f in deliverable if f not in hot]
+            # Inboxes get one report a day (the digest sweep) unless
+            # email_every_sweep is on; the site and console see every sweep.
+            held = self._held_channels(preview)
             if regular:
-                self._dispatch(regular, report, dry_run=dry_run, preview=preview)
+                self._dispatch(
+                    regular, report, dry_run=dry_run, preview=preview, hold=held
+                )
+                if digest and not dry_run and held:
+                    self._send_daily_digest(targets, report, only=held)
             elif digest and not dry_run:
                 # Everything new was inside its cooldown. The daily report still
                 # goes, or a quiet morning is indistinguishable from a dead cron.
@@ -478,6 +485,12 @@ class Pipeline:
             keep.append(finding)
         return keep
 
+    def _held_channels(self, preview: bool = False) -> set[str]:
+        """Inbox channels that wait for the daily digest instead of every sweep."""
+        if preview or self.settings.email_every_sweep:
+            return set()
+        return set(self.settings.inbox_channels)
+
     def _routes(self, findings: Sequence[Finding]) -> dict[str, list[Finding]]:
         """Group findings by the channel each should go to."""
         routes: dict[str, list[Finding]] = defaultdict(list)
@@ -489,7 +502,7 @@ class Pipeline:
 
     def _message_for(
         self, notifier: Notifier, group: Sequence[Finding], report: RunReport,
-        channel: str = "",
+        channel: str = "", new_since: datetime | None = None,
     ) -> Message:
         """Render for one channel.
 
@@ -520,6 +533,12 @@ class Pipeline:
         # window missed still belongs in the report, so union rather than trust.
         known = {f.item.key for f in entries if f.item}
         entries = list(entries) + [f for f in group if f.item and f.item.key not in known]
+        if new_since is not None:
+            # A once-a-day mail: "new" is everything since the last one, not
+            # only what this one sweep happened to find.
+            fresh = [f for f in entries if f.item and f.created_at >= new_since]
+            new_keys |= {f.item.key for f in fresh}
+            group = list(group) + [f for f in fresh if f not in group]
 
         s = self.settings
         # The website keeps the longer history; the inbox is capped tighter so a
@@ -566,7 +585,10 @@ class Pipeline:
             self._floors = {t.name: t.base_url for t in targets if t.base_url}
         notifier.send(self._message_for(notifier, [], RunReport(), channel="web"))
 
-    def _send_daily_digest(self, targets: Sequence[Target], report: RunReport) -> None:
+    def _send_daily_digest(
+        self, targets: Sequence[Target], report: RunReport,
+        only: set[str] | None = None,
+    ) -> None:
         """Send the full report to every inbox channel even though nothing is new.
 
         Once a day the report goes regardless, as proof of life. Without it a
@@ -575,7 +597,11 @@ class Pipeline:
         Console channels are skipped: nobody is watching them at 6am.
         """
         channels = sorted({c for t in targets if t.enabled for c in t.channels})
+        held = self._held_channels()
+        since = utcnow() - timedelta(hours=self.settings.email_new_hours)
         for channel in channels:
+            if only is not None and channel not in only:
+                continue
             try:
                 notifier = get_notifier(channel, self.settings)
                 if not notifier.wants_digest:
@@ -583,9 +609,14 @@ class Pipeline:
                 ok, why = notifier.available()
                 if not ok:
                     raise RuntimeError(why)
-                notifier.send(self._message_for(notifier, [], report, channel=channel))
+                notifier.send(
+                    self._message_for(
+                        notifier, [], report, channel=channel,
+                        new_since=since if channel in held else None,
+                    )
+                )
                 report.notified.setdefault(channel, 0)
-                log.info("daily digest sent to %s (nothing new)", channel)
+                log.info("daily digest sent to %s", channel)
             except Exception as exc:
                 log.error("daily digest to %s failed: %s", channel, exc)
                 report.errors[f"notify:{channel}"] = str(exc)
@@ -608,8 +639,11 @@ class Pipeline:
         report: RunReport,
         dry_run: bool = False,
         preview: bool = False,
+        hold: set[str] | None = None,
     ) -> None:
         routes = self._routes(findings)
+        if hold:
+            routes = {c: g for c, g in routes.items() if c not in hold}
         if preview:
             # Rules can add channels after a target's own list, so the override
             # has to happen here — at dispatch — or a rule silently re-adds

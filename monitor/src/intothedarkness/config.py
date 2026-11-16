@@ -134,6 +134,14 @@ class Settings(BaseSettings):
     # recent_days; "Previous" runs recent_days..email_days as compact one-liners;
     # nothing older than email_days is in the email at all. The website renders
     # the same buckets but out to web_days, so it keeps the longer history.
+    # Inbox volume (2026-11-14): mailing every sweep meant 10-20 reports a day.
+    # Inbox channels now get one report a day, on the digest sweep, covering
+    # everything new in the last email_new_hours; the website still updates on
+    # every sweep and [URGENT] watchlist-vendor mail still goes at once.
+    # email_every_sweep=true restores a mail per sweep.
+    inbox_channels: list[str] = Field(default_factory=lambda: ["resend", "email"])
+    email_every_sweep: bool = False
+    email_new_hours: int = 24
     recent_days: int = 4
     email_days: int = 30
     web_days: int = 180

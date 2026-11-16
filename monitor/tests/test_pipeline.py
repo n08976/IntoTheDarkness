@@ -568,3 +568,47 @@ def test_report_includes_vendor_listings_the_rules_never_reported(settings, repo
     finally:
         CHANNELS.pop("inbox", None)
         InboxNotifier.sent = []
+
+
+def test_inbox_waits_for_the_daily_digest_while_other_channels_see_every_sweep(settings, repo):
+    # Mailing every sweep meant 10-20 reports a day. An inbox now gets one
+    # report, on the digest sweep, covering what the day's sweeps found.
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    settings.inbox_channels = ["inbox"]
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox", "capture"])])           # seeds silently
+        FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+        p.run([target(channels=["inbox", "capture"])])
+        assert InboxNotifier.sent == []                           # held
+        assert len(CapturingNotifier.sent) == 1                   # others not held
+
+        FEED[:] = [("a", "Alpha"), ("b", "Beta"), ("c", "Gamma")]
+        p.run([target(channels=["inbox", "capture"])], digest=True)
+        assert len(InboxNotifier.sent) == 1
+        mail = InboxNotifier.sent[0]
+        assert "2 new" in mail.subject                            # Beta was held, Gamma is fresh
+        assert "Beta" in mail.text and "Gamma" in mail.text
+        assert len(CapturingNotifier.sent) == 2
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
+
+
+def test_email_every_sweep_restores_a_mail_per_sweep(settings, repo):
+    CHANNELS["inbox"] = InboxNotifier
+    InboxNotifier.sent = []
+    settings.inbox_channels = ["inbox"]
+    settings.email_every_sweep = True
+    try:
+        p = pipeline(settings, repo)
+        FEED[:] = [("a", "Alpha")]
+        p.run([target(channels=["inbox"])])
+        FEED[:] = [("a", "Alpha"), ("b", "Beta")]
+        p.run([target(channels=["inbox"])])
+        assert len(InboxNotifier.sent) == 1
+    finally:
+        CHANNELS.pop("inbox", None)
+        InboxNotifier.sent = []
