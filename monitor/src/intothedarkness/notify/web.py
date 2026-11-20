@@ -28,7 +28,7 @@ PAGE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
-<title>Scan results · {stamp}</title>
+<title>{title} · {stamp}</title>
 <style>
   body{{margin:0;background:#f9fafb;color:#111827;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}
   main{{max-width:760px;margin:0 auto;padding:24px 16px 60px}}
@@ -41,7 +41,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <main>
-  <div class="top"><h1>Scan results</h1><span>{stamp}</span>{banner}<a href="reports/">all reports</a><a href="#diagnostics">diagnostics</a></div>
+  <div class="top"><h1>{title}</h1><span>{stamp}</span>{banner}{nav}</div>
 {body}
 </main>
 </body>
@@ -93,15 +93,30 @@ class WebNotifier(Notifier):
         now = datetime.now(UTC)
         stamp = now.strftime("%Y-%m-%d %H:%M UTC")
 
-        body = message.html or f"<pre>{message.text}</pre>"
-        if s.site_defang:
-            # Only hidden-service links are neutralised; clearnet links (X posts,
-            # news, victim sites) stay clickable so the reader can open them.
-            body = defang_onion(body)
-        # The report's own footer names the product; the page names nothing.
-        body = re.sub(r"IntoTheDarkness\s*·\s*", "", body)
-        # Article links open in a new tab.
-        body = open_links_in_new_tab(body)
+        def public(html: str) -> str:
+            if s.site_defang:
+                # Only hidden-service links are neutralised; clearnet links (X
+                # posts, news, victim sites) stay clickable for the reader.
+                html = defang_onion(html)
+            # The report's own footer names the product; the page names nothing.
+            html = re.sub(r"IntoTheDarkness\s*·\s*", "", html)
+            # Article links open in a new tab.
+            return open_links_in_new_tab(html)
+
+        body = public(message.html or f"<pre>{message.text}</pre>")
+        # The archive is rebuilt from stored data on every publish, so it is
+        # what has aged out as of now, not a frozen copy. A message without
+        # one (a test, a plain report) leaves any existing page in place.
+        if message.archive_html:
+            (root / "archive.html").write_text(
+                PAGE.format(
+                    title="Archive", stamp=stamp, banner="",
+                    nav='<a href="./">current report</a><a href="reports/">all reports</a>',
+                    body=public(message.archive_html),
+                ),
+                encoding="utf-8",
+            )
+        has_archive = (root / "archive.html").exists()
 
         events = diag.load(Path(s.issues_file))
         issues = diag.open_issues(events)
@@ -110,11 +125,19 @@ class WebNotifier(Notifier):
             f'<a href="#diagnostics" style="color:#991b1b;font-weight:600">'
             f"&#9888; {len(issues)} open issue(s)</a>" if issues else ""
         )
-        page = PAGE.format(stamp=stamp, body=body, banner=banner)
+        nav = (
+            ('<a href="archive.html">archive</a>' if has_archive else "")
+            + '<a href="reports/">all reports</a><a href="#diagnostics">diagnostics</a>'
+        )
+        page = PAGE.format(title="Scan results", stamp=stamp, body=body, banner=banner, nav=nav)
         reports = root / "reports"
         reports.mkdir(parents=True, exist_ok=True)
         (root / "index.html").write_text(page, encoding="utf-8")
-        (reports / f"{now.strftime('%Y-%m-%d-%H%M')}.html").write_text(page, encoding="utf-8")
+        # The dated copy lives one directory down, so its links climb back up.
+        dated = page.replace('href="archive.html"', 'href="../archive.html"').replace(
+            'href="reports/"', 'href="./"'
+        )
+        (reports / f"{now.strftime('%Y-%m-%d-%H%M')}.html").write_text(dated, encoding="utf-8")
 
         kept = sorted(reports.glob("????-??-??-????.html"), reverse=True)
         for old in kept[s.site_keep_reports :]:

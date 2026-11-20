@@ -135,9 +135,16 @@ class Settings(BaseSettings):
     priority_days: int = 10
     # Report aging (2026-10-05): the victim lists age in two steps so a report
     # stops repeating the same entries for weeks. "Recent" is the last
-    # recent_days; "Previous" runs recent_days..email_days as compact one-liners;
-    # nothing older than email_days is in the email at all. The website renders
-    # the same buckets but out to web_days, so it keeps the longer history.
+    # recent_days; "Previous" runs recent_days..report_days as compact one-liners;
+    # nothing older than report_days is in the report at all.
+    # Focus (2026-11-20): at a 30-day mail and a 180-day page, half of every
+    # report was entries the reader had been shown for weeks, and X posts had
+    # no cutoff at all (382 of 822 lines, in a 496 KB mail that Gmail clips at
+    # 102 KB). The mail and the site's front page are now the same current
+    # report: report_days for victims and filings, social_days for X posts
+    # (and at most social_max of them in a mail; 0 = no cap). Everything that
+    # ages out, back to web_days, is on the site's archive page, which the
+    # mail links when site_url is set.
     # Inbox volume (2026-11-14): mailing every sweep meant 10-20 reports a day.
     # Inbox channels now get one report a day, on the digest sweep, covering
     # everything new in the last email_new_hours; the website still updates on
@@ -147,7 +154,9 @@ class Settings(BaseSettings):
     email_every_sweep: bool = False
     email_new_hours: int = 24
     recent_days: int = 4
-    email_days: int = 30
+    report_days: int = 10
+    social_days: int = 3
+    social_max: int = 25
     web_days: int = 180
 
     # Priority watchlist: vendor names whose appearance anywhere is urgent.
@@ -214,6 +223,10 @@ class Settings(BaseSettings):
     site_push: bool = True
     site_defang: bool = True
     site_keep_reports: int = 400
+    # The page's public address, e.g. https://example.org/scan/ -- only used
+    # to link the archive from the mail. Empty: the mail says the archive is
+    # on the website without linking it.
+    site_url: str = ""
     # Run after a successful push, e.g. the host's own deploy command over
     # SSH. cPanel is supposed to deploy on push by itself; its first attempt
     # produced an empty log, so the channel asks explicitly.

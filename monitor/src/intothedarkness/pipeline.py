@@ -19,6 +19,7 @@ from .notify import (
     Message,
     Notifier,
     get_notifier,
+    render_archive_html,
     render_digest_html,
     render_digest_text,
     render_html,
@@ -601,10 +602,19 @@ class Pipeline:
             group = list(group) + [f for f in fresh if f not in group]
 
         s = self.settings
-        # The website keeps the longer history; the inbox is capped tighter so a
-        # report stops repeating the same victims for weeks.
-        window = s.web_days if channel == "web" else s.email_days
+        # The inbox and the site's front page are the same current report; what
+        # ages out of it goes to the site's archive page, not to either of them.
+        web = channel == "web"
+        window = s.report_days
         days = window
+        shape = dict(
+            window_days=window, recent_days=s.recent_days, carry=s.digest_sectors,
+            priority_days=s.priority_days, social_days=s.social_days,
+        )
+        if web:
+            archive_url = "archive.html"
+        else:
+            archive_url = f"{s.site_url.rstrip('/')}/archive.html" if s.site_url else ""
         if new_keys:
             top = max((f.severity for f in group), key=lambda sev: sev.rank)
             subject = (
@@ -614,17 +624,19 @@ class Pipeline:
         else:
             subject = f"IntoTheDarkness daily: no new entries — last {days} days"
 
-        text = render_digest_text(
-            entries, new_keys, status=status, window_days=window,
-            recent_days=s.recent_days, priority=s.priority_sectors,
-            carry=s.digest_sectors, priority_days=s.priority_days,
+        opts = dict(
+            shape, status=status, priority=s.priority_sectors,
+            social_max=0 if web else s.social_max, archive_url=archive_url,
         )
-        html = render_digest_html(
-            entries, new_keys, status=status, window_days=window,
-            recent_days=s.recent_days, priority=s.priority_sectors,
-            carry=s.digest_sectors, priority_days=s.priority_days,
+        text = render_digest_text(entries, new_keys, **opts)
+        html = render_digest_html(entries, new_keys, **opts)
+        archive = (
+            render_archive_html(entries, new_keys, archive_days=s.web_days, **shape)
+            if web else ""
         )
-        return Message(subject=subject, text=text, html=html, findings=group)
+        return Message(
+            subject=subject, text=text, html=html, findings=group, archive_html=archive
+        )
 
     def publish_site(self, targets: Sequence[Target] | None = None) -> None:
         """Republish the website from stored data, without scraping.

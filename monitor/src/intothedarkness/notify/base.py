@@ -16,6 +16,8 @@ class Message:
     text: str
     html: str = ""
     findings: Sequence[Finding] = ()
+    #: What has aged out of the report, for a channel that keeps history.
+    archive_html: str = ""
 
     @property
     def max_severity(self) -> Severity:

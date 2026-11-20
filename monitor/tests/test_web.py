@@ -57,3 +57,22 @@ def test_page_carries_a_diagnostics_section_and_flags_open_issues(settings, tmp_
     get_notifier("web", settings).send(Message(subject="s", text="t", html="<p>x</p>"))
     page = (settings.site_dir / "index.html").read_text()
     assert 'id="diagnostics"' in page and "1 open issue(s)" in page and "tor-down" in page
+
+
+def test_web_channel_publishes_the_archive_page_and_links_it(settings, tmp_path):
+    settings.site_dir = tmp_path
+    settings.site_push = False
+    web = get_notifier("web", settings)
+    web.send(Message(subject="s", text="t", html="<p>now</p>",
+                     archive_html='<p>IntoTheDarkness · then</p><a href="http://abc.onion/x">leak</a>'))
+
+    archive = (tmp_path / "archive.html").read_text()
+    assert "<title>Archive" in archive and "IntoTheDarkness" not in archive
+    assert "hxxp://abc[.]onion/x" in archive and 'href="./"' in archive
+    assert 'href="archive.html"' in (tmp_path / "index.html").read_text()
+    dated = next((tmp_path / "reports").glob("????-??-??-????.html")).read_text()
+    assert 'href="../archive.html"' in dated                       # one directory down
+
+    # A report with no archive of its own leaves the published one alone.
+    web.send(Message(subject="s", text="t", html="<p>later</p>"))
+    assert "then" in (tmp_path / "archive.html").read_text()

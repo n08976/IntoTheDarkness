@@ -5,6 +5,7 @@ from .console import ConsoleNotifier
 from .email import EmailNotifier
 from .preview import PreviewNotifier
 from .render import (
+    render_archive_html,
     render_digest_html,
     render_digest_text,
     render_html,
@@ -28,6 +29,7 @@ __all__ = [
     "available",
     "get_notifier",
     "register",
+    "render_archive_html",
     "render_digest_html",
     "render_digest_text",
     "render_html",

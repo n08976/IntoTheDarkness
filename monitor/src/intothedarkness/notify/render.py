@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from jinja2 import Environment, select_autoescape
@@ -264,6 +265,79 @@ def _carried(findings: Sequence[Finding], carry: Sequence[str]) -> tuple[list[Fi
     return kept, len(findings) - len(kept)
 
 
+@dataclass(slots=True)
+class Buckets:
+    """One report, sorted into its sections -- and what fell out of it."""
+
+    vendors: list[Finding]
+    filings: list[Finding]
+    social: list[Finding]
+    social_more: int          # relevant posts inside the window, over the cap
+    new: list[Finding]
+    recent: list[Finding]
+    recent_rest: int
+    previous: list[Finding]
+    previous_rest: int
+    archive: list[Finding]    # aged out of the report, kept for the archive page
+    archive_rest: int         # aged out, in sectors that are only ever counted
+
+
+def bucket(
+    entries: Sequence[Finding],
+    new_keys: set[str],
+    window_days: int = 30,
+    recent_days: int = 4,
+    carry: Sequence[str] = ("healthcare",),
+    priority_days: int = 10,
+    social_days: int = 0,
+    social_max: int = 0,
+    now: datetime | None = None,
+) -> Buckets:
+    """Sort entries into the report's sections; the remainder is the archive.
+
+    The report is what is current: nothing older than `window_days`, and
+    posts from X only for `social_days` (0 = no cutoff), because social intel
+    is the loudest and least confirmed thing here and goes stale fastest.
+    Whatever ages out is not lost -- it is returned as `archive`, which the
+    website publishes on its own page. Something that is new in this report
+    is always shown, however old its source says it is.
+    """
+    social, rest = _split_social(entries, carry)
+    is_new = lambda f: bool(f.item and f.item.key in new_keys)  # noqa: E731
+    old_social = [f for f in social if not (is_new(f) or _is_recent(f, social_days, now))]
+    social = _newest_first([f for f in social if is_new(f) or _is_recent(f, social_days, now)])
+    social_more = 0
+    if social_max > 0 and len(social) > social_max:
+        social_more = len(social) - social_max
+        social = social[:social_max]
+
+    vendors, filings, rest = _split_vendor_victims(rest, priority_days, now)
+    new = [f for f in rest if is_new(f)]
+    aged = [f for f in rest if not is_new(f)]
+    current = [f for f in aged if _is_recent(f, window_days, now)]
+    gone = [f for f in aged if not _is_recent(f, window_days, now)]
+    recent, recent_rest = _carried(
+        [f for f in current if _is_recent(f, recent_days, now)], carry
+    )
+    previous, previous_rest = _carried(
+        [f for f in current if not _is_recent(f, recent_days, now)], carry
+    )
+    gone, archive_rest = _carried(gone, carry)
+    return Buckets(
+        vendors=vendors, filings=filings, social=social, social_more=social_more,
+        new=new, recent=recent, recent_rest=recent_rest,
+        previous=previous, previous_rest=previous_rest,
+        archive=gone + old_social, archive_rest=archive_rest,
+    )
+
+
+def _archive_note(count: int, url: str) -> str:
+    if count <= 0:
+        return ""
+    noun = "entry is" if count == 1 else "entries are"
+    return f"{count} older {noun} in the archive" + (f": {url}" if url else " on the website.")
+
+
 def render_digest_text(
     entries: Sequence[Finding],
     new_keys: set[str],
@@ -275,20 +349,19 @@ def render_digest_text(
     carry: Sequence[str] = ("healthcare",),
     priority_days: int = 10,
     now: datetime | None = None,
+    social_days: int = 0,
+    social_max: int = 0,
+    archive_url: str = "",
 ) -> str:
-    """New first, then Recent, then a compact Previous list out to window_days."""
-    social, entries = _split_social(entries, carry)
-    vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
+    """Priority, then New, Recent, a compact Previous list, and X posts last."""
+    b = bucket(
+        entries, new_keys, window_days, recent_days, carry, priority_days,
+        social_days, social_max, now,
+    )
+    vendors, filings, social, new = b.vendors, b.filings, b.social, b.new
+    recent_list, recent_rest = b.recent, b.recent_rest
+    previous_list, previous_rest = b.previous, b.previous_rest
     pwin = f", LAST {priority_days} DAYS" if priority_days > 0 else ""
-    new = [f for f in entries if f.item and f.item.key in new_keys]
-    aged = [f for f in entries if not (f.item and f.item.key in new_keys)]
-    aged = [f for f in aged if _is_recent(f, window_days, now)]   # drop beyond the cutoff
-    recent_list, recent_rest = _carried(
-        [f for f in aged if _is_recent(f, recent_days, now)], carry
-    )
-    previous_list, previous_rest = _carried(
-        [f for f in aged if not _is_recent(f, recent_days, now)], carry
-    )
 
     lines = [
         f"{len(new)} new since the last report"
@@ -330,19 +403,6 @@ def render_digest_text(
         ]
         for f in _newest_first(filings):
             lines.append(f"  !! {_filing_line(f)}")
-            lines += _links(f)
-        lines.append("")
-
-    # Monitored X feeds: relevant posts only, their own section above the victim
-    # lists so social intel is never confused with a confirmed leak-site victim.
-    if social:
-        lines += [
-            f"MONITORED X FEEDS — RELEVANT POSTS ({len(social)})",
-            "=" * 46,
-            "",
-        ]
-        for f in _newest_first(social):
-            lines.append(f"  ~ {_social_line(f)}")
             lines += _links(f)
         lines.append("")
 
@@ -405,6 +465,27 @@ def render_digest_text(
         if previous_rest:
             lines.append(f"  … plus {previous_rest} in other sectors, not listed.")
         lines.append("")
+
+    # Monitored X feeds: relevant posts only, in their own section so social
+    # intel is never confused with a confirmed leak-site victim -- and last,
+    # because it is the least confirmed thing in the report.
+    if social:
+        swin = f" — LAST {social_days} DAYS" if social_days > 0 else ""
+        lines += [
+            f"MONITORED X FEEDS — RELEVANT POSTS{swin} ({len(social)})",
+            "=" * 46,
+            "",
+        ]
+        for f in social:
+            lines.append(f"  ~ {_social_line(f)}")
+            lines += _links(f)
+        if b.social_more:
+            lines.append(f"  … plus {b.social_more} more, on the website.")
+        lines.append("")
+
+    note = _archive_note(len(b.archive), archive_url)
+    if note:
+        lines += [note, ""]
 
     return "\n".join(lines).rstrip()
 
@@ -504,7 +585,8 @@ _DIGEST_HTML = _env.from_string(
   <p style="margin:0 0 6px;color:#4b5563">
     <strong style="color:{{ '#dc2626' if new|length else '#6b7280' }}">
       {{ new|length }} new</strong> since the last report;
-    <strong>{{ running|length }}</strong> more in the last {{ window_days }} days.
+    <strong>{{ recent_list|length + previous_list|length }}</strong> more in the last
+    {{ window_days }} days.
   </p>
   {% if status %}
   <p style="margin:0 0 16px;color:#9ca3af;font-size:12px">{{ status }}</p>
@@ -518,8 +600,8 @@ _DIGEST_HTML = _env.from_string(
       &#9888; Vendor victims — priority watchlist{{ recent }} ({{ vendors|length }})</h2>
     <p style="margin:0 0 8px;color:#92400e;font-size:12px">
       Vendors you depend on, named on a leak site. Listed here and nowhere else in this
-      report{% if priority_days > 0 %}; after {{ priority_days }} days an entry moves to the
-      sections below, still marked <strong>VENDOR</strong>{% endif %}.</p>
+      report{% if priority_days > 0 %}; after {{ priority_days }} days an entry ages out
+      of this box, still marked <strong>VENDOR</strong>{% endif %}.</p>
     <ul style="margin:8px 0 0;padding-left:18px">
       {% for f in vendors %}{{ entry(f) }}{% endfor %}
     </ul>
@@ -535,24 +617,10 @@ _DIGEST_HTML = _env.from_string(
     <p style="margin:0 0 8px;color:#1e3a8a;font-size:12px">
       Vendors that disclosed a cybersecurity incident to the SEC. Item 1.05 is a material
       incident by the company's own determination; 8.01 is incident wording under other
-      events{% if priority_days > 0 %}; after {{ priority_days }} days a filing moves to the
-      sections below, still marked <strong>SEC 8-K</strong>{% endif %}.</p>
+      events{% if priority_days > 0 %}; after {{ priority_days }} days a filing ages out
+      of this box, still marked <strong>SEC 8-K</strong>{% endif %}.</p>
     <ul style="margin:8px 0 0;padding-left:18px">
       {% for f in filings %}{{ entry(f) }}{% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
-  {% if social %}
-  <div style="border:2px solid #4338ca;border-radius:6px;padding:2px 16px 10px;
-              margin-bottom:24px;background:#eef2ff">
-    <h2 style="font-size:15px;margin:12px 0 4px;color:#3730a3">
-      &#128038; Monitored X feeds — relevant posts ({{ social|length }})</h2>
-    <p style="margin:0 0 8px;color:#3730a3;font-size:12px">
-      Posts from the watched X accounts that name a watchlist vendor or a
-      healthcare target. Social intel, not confirmed leak-site victims.</p>
-    <ul style="margin:8px 0 0;padding-left:18px">
-      {% for f in social %}{{ entry(f) }}{% endfor %}
     </ul>
   </div>
   {% endif %}
@@ -598,6 +666,31 @@ _DIGEST_HTML = _env.from_string(
   <p style="margin:6px 0 0;color:#9ca3af;font-size:12px">
     … plus {{ previous_rest }} in other sectors, not listed.</p>
   {% endif %}
+  {% endif %}
+
+  {% if social %}
+  <div style="border:2px solid #4338ca;border-radius:6px;padding:2px 16px 10px;
+              margin:24px 0 0;background:#eef2ff">
+    <h2 style="font-size:15px;margin:12px 0 4px;color:#3730a3">
+      &#128038; Monitored X feeds — relevant posts{{ social_window }} ({{ social|length }})</h2>
+    <p style="margin:0 0 8px;color:#3730a3;font-size:12px">
+      Posts from the watched X accounts that name a watchlist vendor or a
+      healthcare target. Social intel, not confirmed leak-site victims.</p>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      {% for f in social %}{{ entry(f) }}{% endfor %}
+    </ul>
+    {% if social_more %}
+    <p style="margin:8px 0 0;color:#3730a3;font-size:12px">
+      … plus {{ social_more }} more, on the website.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if archive_count %}
+  <p style="margin:24px 0 0;color:#4b5563;font-size:13px">
+    {{ archive_count }} older {{ 'entry is' if archive_count == 1 else 'entries are' }} in the
+    {% if archive_url %}<a href="{{ archive_url }}" style="color:#1d4ed8">archive</a>.
+    {%- else %}archive on the website.{% endif %}</p>
   {% endif %}
 
   <p style="margin-top:24px;color:#9ca3af;font-size:12px">
@@ -675,28 +768,30 @@ def render_digest_html(
     carry: Sequence[str] = ("healthcare",),
     priority_days: int = 10,
     now: datetime | None = None,
+    social_days: int = 0,
+    social_max: int = 0,
+    archive_url: str = "",
 ) -> str:
     from ..models import utcnow
 
-    social, entries = _split_social(entries, carry)
-    vendors, filings, entries = _split_vendor_victims(entries, priority_days, now)
-    new = [f for f in entries if f.item and f.item.key in new_keys]
-    aged = [f for f in entries if not (f.item and f.item.key in new_keys)]
-    aged = [f for f in aged if _is_recent(f, window_days, now)]
-    recent_list, recent_rest = _carried([f for f in aged if _is_recent(f, recent_days, now)], carry)
-    previous_list, previous_rest = _carried(
-        [f for f in aged if not _is_recent(f, recent_days, now)], carry
+    b = bucket(
+        entries, new_keys, window_days, recent_days, carry, priority_days,
+        social_days, social_max, now,
     )
     return _DIGEST_HTML.render(
         total=len(entries),
-        vendors=_newest_first(vendors),
-        filings=_newest_first(filings),
-        new=_priority_first(new, priority),
-        social=_newest_first(social),
-        recent_list=_newest_first(recent_list),
-        previous_list=_newest_first(previous_list),
-        recent_rest=recent_rest,
-        previous_rest=previous_rest,
+        vendors=_newest_first(b.vendors),
+        filings=_newest_first(b.filings),
+        new=_priority_first(b.new, priority),
+        social=b.social,
+        social_more=b.social_more,
+        social_window=f", last {social_days} days" if social_days > 0 else "",
+        archive_count=len(b.archive),
+        archive_url=archive_url,
+        recent_list=_newest_first(b.recent),
+        previous_list=_newest_first(b.previous),
+        recent_rest=b.recent_rest,
+        previous_rest=b.previous_rest,
         carried=", ".join(carry) if carry else "all sectors",
         priority_label=", ".join(priority),
         priority_days=priority_days,
@@ -707,6 +802,98 @@ def render_digest_html(
         prev=lambda f: Markup(_PREV.render(f=f, stamp=stamp_for, sector=_sector_of(f))),
         status=status,
         window_days=window_days,
+        now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
+_ARCHIVE_HTML = _env.from_string(
+    """
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            font-size:14px;color:#111827;max-width:720px">
+  <p style="margin:0 0 16px;color:#4b5563">
+    <strong>{{ total }}</strong> entries that have aged out of the current report
+    (older than {{ window_days }} days{% if social_days > 0 %}; X posts older than
+    {{ social_days }}{% endif %}), back {{ archive_days }} days. {{ carried|capitalize }}
+    and watchlist vendors are listed{% if rest %}; {{ rest }} in other sectors are
+    not{% endif %}. Newest first.</p>
+  {% if not months %}
+  <p style="color:#6b7280">Nothing has aged out yet.</p>
+  {% endif %}
+  {% for month, group in months %}
+  <h2 style="font-size:15px;margin:22px 0 6px;padding-bottom:4px;
+             border-bottom:1px solid #e5e7eb">{{ month }} ({{ group|length }})</h2>
+  <ul style="margin:6px 0 0;padding-left:18px;font-size:13px">
+    {% for f in group %}{{ line(f) }}{% endfor %}
+  </ul>
+  {% endfor %}
+  <p style="margin-top:24px;color:#9ca3af;font-size:12px">
+    IntoTheDarkness · {{ now }}</p>
+</div>
+"""
+)
+
+_ARCHIVE_LINE = _env.from_string(
+    """<li style="margin-bottom:3px">
+  <span style="color:#9ca3af">{{ stamp(f).text }}</span>
+  {% if f.item and f.item.fields.get('source') == 'x' -%}
+  <span style="font-size:11px;color:#4338ca;font-weight:600">X · @{{
+    f.item.fields.get('handle') }}</span>
+  {% endif -%}
+  {{ f.item.summary() if f.item else f.message }}
+  <span style="font-size:11px;color:#9ca3af;text-transform:uppercase">{{ sector }}</span>
+  {%- if f.item and f.item.fields.get('watchlist') %}
+  <span style="font-size:11px;color:#92400e;font-weight:600">·
+    {{ 'SEC 8-K' if f.item.fields.get('form') else 'VENDOR' }}:
+    {{ f.item.fields['watchlist'] }}</span>
+  {%- endif %}
+  {%- if f.item and f.item.url %}
+  <a href="{{ f.item.url }}" style="font-size:12px;color:#b91c1c;text-decoration:none">{{
+    'post' if f.item.fields.get('source') == 'x' else 'leak' }}</a>
+  {%- endif %}
+  {%- if f.item and f.item.fields.get('website') %}
+  <a href="{{ f.item.fields['website'] }}"
+     style="font-size:12px;color:#1d4ed8;text-decoration:none">site</a>
+  {%- endif %}
+</li>"""
+)
+
+
+def render_archive_html(
+    entries: Sequence[Finding],
+    new_keys: set[str],
+    window_days: int = 10,
+    recent_days: int = 4,
+    carry: Sequence[str] = ("healthcare",),
+    priority_days: int = 10,
+    social_days: int = 0,
+    archive_days: int = 180,
+    now: datetime | None = None,
+) -> str:
+    """Everything that aged out of the report, by month, one line each.
+
+    Built from the same bucketing as the report, so an entry is in exactly
+    one of the two: nothing is listed twice and nothing falls between them.
+    """
+    from ..models import utcnow
+
+    b = bucket(
+        entries, new_keys, window_days, recent_days, carry, priority_days,
+        social_days, 0, now,
+    )
+    kept = [f for f in b.archive if _is_recent(f, archive_days, now)]
+    months: dict[str, list[Finding]] = {}
+    for f in _newest_first(kept):
+        when = stamp_for(f).when or f.created_at
+        months.setdefault(when.strftime("%B %Y"), []).append(f)
+    return _ARCHIVE_HTML.render(
+        total=len(kept),
+        rest=b.archive_rest,
+        months=list(months.items()),
+        carried=", ".join(carry) if carry else "all sectors",
+        window_days=window_days,
+        social_days=social_days,
+        archive_days=archive_days,
+        line=lambda f: Markup(_ARCHIVE_LINE.render(f=f, stamp=stamp_for, sector=_sector_of(f))),
         now=utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     )
 

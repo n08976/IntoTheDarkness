@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from intothedarkness.models import Finding, FindingKind, Item, Severity
-from intothedarkness.notify import render_html, render_subject, render_text
+from intothedarkness.notify import (
+    render_digest_html,
+    render_digest_text,
+    render_html,
+    render_subject,
+    render_text,
+)
 
 
 def finding(target="t", severity=Severity.INFO, title="Something", **kw) -> Finding:
@@ -252,7 +260,8 @@ def test_x_feed_posts_render_in_their_own_section_not_the_victim_lists():
     ]
     text = render_digest_text(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
     assert "MONITORED X FEEDS" in text
-    assert text.index("MONITORED X FEEDS") < text.index("NEW SINCE LAST REPORT")
+    # Social intel is the least confirmed section, so it comes last.
+    assert text.index("MONITORED X FEEDS") > text.index("NEW SINCE LAST REPORT")
     # the healthcare tweet stays in the feeds section
     feeds = text.split("MONITORED X FEEDS", 1)[1]
     assert "@vxunderground" in feeds
@@ -264,7 +273,7 @@ def test_x_feed_posts_render_in_their_own_section_not_the_victim_lists():
 
     html = render_digest_html(entries, {"x:1", "x:2", "n1"}, now=now, priority_days=10)
     assert "Monitored X feeds" in html and "@vxunderground" in html
-    assert html.index("Monitored X feeds") < html.index("New since last report")
+    assert html.index("Monitored X feeds") > html.index("New since last report")
 
 
 def test_x_post_naming_a_vendor_goes_to_vendor_victims_marked_via_x():
@@ -301,3 +310,71 @@ def test_x_post_naming_a_vendor_goes_to_vendor_victims_marked_via_x():
     html = render_digest_html(entries, {"x:1", "x:2"}, now=now)
     assert "Vendor victims" in html and "via X · @FalconFeedsio" in html
     assert html.index("Acme Corp breach") < html.index("Monitored X feeds")
+
+
+def test_report_keeps_what_is_current_and_the_archive_takes_the_rest():
+    from intothedarkness.notify.render import bucket, render_archive_html
+
+    now = datetime(2026, 11, 20, 12, tzinfo=UTC)
+
+    def f(key, target, title, **fields):
+        fields.setdefault("sector", "healthcare")
+        item = Item(target=target, key=key, title=title, fields=fields)
+        return Finding(target=target, kind=FindingKind.NEW, severity=Severity.HIGH,
+                       item=item, message=title, created_at=now)
+
+    def x(key, title, published):
+        return f(key, "x", title, source="x", handle="feed", published=published)
+
+    entries = [
+        f("fresh", "dls", "Fresh Clinic", published="2026-11-18"),
+        f("week", "dls", "Week Old Clinic", published="2026-11-13"),
+        f("stale", "dls", "Stale Hospital", published="2026-10-20"),
+        f("other", "dls", "Stale Factory", sector="manufacturing", published="2026-10-20"),
+        f("vendor", "dls", "Old Vendor Inc", sector="technology", published="2026-10-25",
+          watchlist="Old Vendor"),
+        f("ancient", "dls", "Ancient Hospital", published="2026-01-05"),
+        x("x:new", "Post today", "2026-11-20T08:00:00+00:00"),
+        x("x:old", "Post last week", "2026-11-14T08:00:00+00:00"),
+        x("x:late", "Old post found today", "2026-11-01T08:00:00+00:00"),
+    ]
+    shape = dict(window_days=10, recent_days=4, priority_days=10, social_days=3, now=now)
+
+    b = bucket(entries, {"x:late"}, **shape)
+    assert [g.item.key for g in b.recent] == ["fresh"]
+    assert [g.item.key for g in b.previous] == ["week"]
+    # New to the reader today, so shown once however old its source says it is.
+    assert {g.item.key for g in b.social} == {"x:new", "x:late"}
+    # Aged out: carried sector, a watchlist vendor of any sector, and old posts.
+    assert {g.item.key for g in b.archive} == {"stale", "vendor", "ancient", "x:old"}
+    assert b.archive_rest == 1                                    # the factory: counted only
+
+    text = render_digest_text(entries, {"x:late"}, archive_url="https://s.example/archive.html",
+                              **shape)
+    assert "Stale Hospital" not in text and "Post last week" not in text
+    assert "4 older entries are in the archive: https://s.example/archive.html" in text
+    html = render_digest_html(entries, {"x:late"}, archive_url="archive.html", **shape)
+    assert "Stale Hospital" not in html and 'href="archive.html"' in html
+
+    page = render_archive_html(entries, {"x:late"}, archive_days=180, **shape)
+    assert "October 2026 (2)" in page and "November 2026 (1)" in page
+    assert "Old Vendor Inc" in page and "VENDOR" in page          # still says what it was
+    assert "Fresh Clinic" not in page and "Week Old Clinic" not in page   # never in both
+    assert "Ancient Hospital" not in page                         # past the archive horizon
+    assert "Stale Factory" not in page and "1 in other sectors" in page
+
+
+def test_mail_caps_the_x_section_and_says_how_many_it_left_out():
+    now = datetime(2026, 11, 20, 12, tzinfo=UTC)
+    entries = [
+        Finding(target="x", kind=FindingKind.NEW, severity=Severity.LOW, message="p",
+                created_at=now,
+                item=Item(target="x", key=f"x:{i}", title=f"Post {i:02d}",
+                          fields={"source": "x", "handle": "feed", "sector": "healthcare",
+                                  "published": f"2026-11-20T{i:02d}:00:00+00:00"}))
+        for i in range(8)
+    ]
+    text = render_digest_text(entries, set(), social_days=3, social_max=5, now=now)
+    assert "Post 07" in text and "Post 03" in text and "Post 02" not in text   # newest kept
+    assert "plus 3 more, on the website" in text
+    assert "Post 02" in render_digest_text(entries, set(), social_days=3, now=now)   # no cap

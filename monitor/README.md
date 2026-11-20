@@ -736,7 +736,10 @@ the next report.
 
 ## What is reported, and in what order
 
-Every emailed report has the same shape, top to bottom:
+Every emailed report has the same shape, top to bottom. It is a report about
+now: nothing older than `ITD_REPORT_DAYS` (default 10) is in it, and the
+website's front page is the same report. What ages out goes to the website's
+**archive** page, not to either of them.
 
 1. **Vendor victims — priority watchlist, last 10 days.** Any victim, in any
    sector, from any source, whose name matches `watchlist/vendors.txt`. These
@@ -749,23 +752,32 @@ Every emailed report has the same shape, top to bottom:
    <name>`.
 
    Both boxes hold only entries dated within `ITD_PRIORITY_DAYS` (default 10)
-   by the date shown on the entry. Older ones **age out** into the sections
-   below, where they stay listed whatever their sector and are marked
-   `[VENDOR: <name>]` or `[SEC 8-K: <name>]`, so the history still says what
-   they were without the top of a report about this week carrying last
-   month's. `0` keeps them on top for the whole window.
+   by the date shown on the entry. Older ones **age out** of the boxes and
+   stay listed whatever their sector, marked `[VENDOR: <name>]` or
+   `[SEC 8-K: <name>]` -- in the sections below while they are still inside
+   the report window, in the archive after it -- so the history still says
+   what they were. `0` keeps them on top for the whole window.
 3. **New since the last report** — every sector, priority sectors
    (`ITD_PRIORITY_SECTORS`, default healthcare) first, newest first within each.
 4. **Recent — last `ITD_RECENT_DAYS` days** (default 4) — the running list in
    full detail, carrying only `ITD_DIGEST_SECTORS` (default healthcare) with the
    rest counted on one line.
-5. **Previous — `recent_days`..cutoff** — the same list older than the recent
-   window, as compact one-liners (date, sector, name, any vendor/8-K mark) so
-   the tail stops repeating a full dossier every day. The cutoff is
-   `ITD_EMAIL_DAYS` (default 30) in the email and `ITD_WEB_DAYS` (default 180)
-   on the website, so nothing older than a month reaches the inbox while the
-   site keeps the longer history; entries past the cutoff fall off entirely.
-6. What the sweep managed — targets swept, items read, any target that failed
+5. **Previous — `ITD_RECENT_DAYS`..`ITD_REPORT_DAYS`** — the same list older
+   than the recent window, as compact one-liners (date, sector, name, any
+   vendor/8-K mark) so the tail stops repeating a full dossier every day.
+6. **Monitored X feeds — last `ITD_SOCIAL_DAYS` days** (default 3) — relevant
+   posts from the watched accounts, last because social intel is the least
+   confirmed thing in the report. A mail carries at most `ITD_SOCIAL_MAX`
+   (default 25, `0` for no cap) and says how many more are on the website.
+7. One line counting what is in the **archive**, linked when `ITD_SITE_URL`
+   is set. The archive is `archive.html` on the website: everything that has
+   aged out of the report, back `ITD_WEB_DAYS` (default 180), one line each,
+   grouped by month, carrying the same sectors as the running list plus
+   anything vendor- or 8-K-marked. It is rebuilt from stored data on every
+   publish, and an entry is in the report or the archive, never both. A host
+   that deploys by copying named files (cPanel's `.cpanel.yml`) needs
+   `archive.html` added to its list.
+8. What the sweep managed — targets swept, items read, any target that failed
    — so an empty report cannot be mistaken for a quiet day when it means the
    sources were unreachable.
 
