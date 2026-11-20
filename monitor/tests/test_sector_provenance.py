@@ -142,3 +142,21 @@ def test_unreadable_index_is_ignored_not_fatal(settings):
 )
 def test_domain_classification(classifier, domain, expected):
     assert classifier.classify_domain(domain) == expected
+
+
+def test_a_free_text_industry_line_from_the_source_beats_a_guess_from_the_name():
+    from intothedarkness.enrich.sector import SOURCE_UPSTREAM, SectorClassifier
+
+    c = SectorClassifier.load(None)
+    # The name alone reads as agriculture ("Farm..."); the source said otherwise.
+    r = c.resolve(name="Chiesi Farmaceutici S.p.A.",
+                  upstream="pharmaceutical (respiratory and rare diseases) · Italy")
+    assert (r.sector, r.source) == ("healthcare", SOURCE_UPSTREAM)
+    # What the description leads with wins over how the organisation works.
+    r = c.resolve(name="Medline Industries, LP",
+                  upstream="medical supplies manufacture and distribution · United States")
+    assert r.sector == "healthcare"
+    port = c.resolve(name="Acme", upstream="Port terminal operations · Turkey")
+    assert port.sector != "healthcare"
+    # A label that says nothing still falls back to the name.
+    assert c.resolve(name="Riverside Hospital", upstream="n/a").sector == "healthcare"

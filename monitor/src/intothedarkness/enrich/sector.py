@@ -45,6 +45,7 @@ DEFAULT_SECTORS: dict[str, list[str]] = {
         "care center", "care centre", "surgery", "orthope", "pediatric",
         "paediatric", "diagnostic", "radiolog", "oncolog", "nursing", "hospice",
         "eye care", "optical", "optometr", "bioresearch", "biotech",
+        "biopharma", "telehealth",
         # Added after measuring recall against live leak-site listings: an
         # ambulance service and a cancer centre were both being missed. Terms
         # that double as other industries are deliberately absent -- "lab",
@@ -250,6 +251,22 @@ class SectorClassifier:
                     return sector
         return UNKNOWN
 
+    def classify_label(self, label: str) -> str:
+        """Label a free-text industry description by what it says first.
+
+        A description leads with what the organisation is and trails off into
+        how it works: "medical supplies manufacture and distribution" is a
+        healthcare supplier, and reading it longest-keyword-first called it
+        manufacturing. So the earliest keyword in the text wins; the longer
+        one breaks a tie at the same position.
+        """
+        best: tuple[int, int, str] | None = None
+        for sector, keyword, pattern in self._compiled:
+            hit = pattern.search(label)
+            if hit and (best is None or (hit.start(), -len(keyword)) < best[:2]):
+                best = (hit.start(), -len(keyword), sector)
+        return best[2] if best else UNKNOWN
+
     def classify_domain(self, domain: str) -> str:
         """Classify from a victim's own domain.
 
@@ -310,6 +327,17 @@ class SectorClassifier:
         mapped = normalize_sector(upstream)
         if mapped:
             return SectorResult(mapped, SOURCE_UPSTREAM)
+        # A source that describes the industry in its own words rather than
+        # from a fixed list ("pharmaceutical (respiratory, rare diseases) ·
+        # Italy") has still stated it. Read the label by keyword before
+        # guessing from the name: the name "Chiesi Farmaceutici" alone was
+        # labelled agriculture, under a line that said pharmaceutical.
+        if upstream and normalize_sector(upstream) is None:
+            key = " ".join(str(upstream).strip().lower().split())
+            if key not in SECTOR_ALIASES:            # not an explicit non-answer
+                by_label = self.classify_label(key)
+                if by_label != UNKNOWN:
+                    return SectorResult(by_label, SOURCE_UPSTREAM)
 
         # A source that classifies this same victim elsewhere is a stated fact
         # about it, not a guess about its name.
